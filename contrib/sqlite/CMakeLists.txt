@@ -15,13 +15,15 @@ target_include_directories("${PROJECT_NAME}" PUBLIC
         "${PROJECT_SOURCE_DIR}"
         "${PROJECT_SOURCE_DIR}/sqlcipher"
         )
-target_link_libraries("${PROJECT_NAME}" PRIVATE OpenSSL::SSL OpenSSL::Crypto dl)
+target_link_libraries("${PROJECT_NAME}" PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 if (WIN32)
   if (MINGW)
     target_link_libraries("${PROJECT_NAME}" PRIVATE ws2_32 mswsock crypt32)
   else()
     target_link_libraries("${PROJECT_NAME}" PRIVATE ws2_32 Mswsock Crypt32)
   endif()
+else()
+  target_link_libraries("$PROJECT_NAME" PRIVATE dl)
 endif()
 
 target_compile_definitions("${PROJECT_NAME}" PRIVATE

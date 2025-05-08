@@ -77,7 +77,7 @@ set(PROJECT_LIBRARIES
     ${Boost_LIBRARIES}
 )
 
-if(WIN32)
+if(WIN32 AND MSVC)
     target_compile_options("${PROJECT_NAME}" PUBLIC /MT)
     target_link_options("${PROJECT_NAME}" PUBLIC /INCREMENTAL:NO /NODEFAULTLIB:MSVCRT)
     set(PROJECT_LIBRARIES ${PROJECT_LIBRARIES} libevent::core libevent::extra)
