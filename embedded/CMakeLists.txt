@@ -29,11 +29,15 @@ set(Bitcoin_INCLUDE_DIRS
     ${PROJECT_SOURCE_DIR}/../${BITCOIN_FOLDER}/src/leveldb/include
 )
 
+find_package(Libevent REQUIRED)
+
 add_library("${PROJECT_NAME}" STATIC embeddedrpc.cpp)
 
 set(PROJECT_LIBRARIES
     ${Bitcoin_LIBRARIES}
     ${Boost_LIBRARIES}
+    libevent::core
+    libevent::extra
 )
 
 target_link_libraries("${PROJECT_NAME}" PRIVATE ${PROJECT_LIBRARIES})
