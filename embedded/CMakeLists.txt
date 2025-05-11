@@ -11,57 +11,16 @@ set(BITCOIN_FOLDER "contrib/bitcoin")
 find_package(Threads REQUIRED)
 find_package(Boost 1.47.0 REQUIRED)
 
-if(WIN32)
-    find_package(Libevent CONFIG REQUIRED)
-
-    set(Bitcoin_LIBRARIES 
-        bitcoin_common
-        bitcoin_util
-        bitcoin_cli
-        bitcoin_node
-        bitcoin_wallet
-        bitcoin_consensus
-        bitcoin_crypto
-        secp256k1
-        univalue
-    )
-elseif(ANDROID OR IOS)
-    set(Bitcoin_LIBRARIES
-            bitcoin_common
-            bitcoin_util
-            bitcoin_node
-            bitcoin_wallet
-            secp256k1
-            leveldb
-            univalue
-    )
-else()
-    find_library(event_lib NAMES libevent.a event)
-    if (NOT event_lib)
-        message(FATAL_ERROR "libevent not found")
-    endif()
-    add_library(event STATIC IMPORTED)
-    set_target_properties(event PROPERTIES IMPORTED_LOCATION ${event_lib})
-
-    find_library(event_pthreads_lib NAMES libevent_pthreads.a event_pthreads)
-    if (NOT event_pthreads_lib)
-        message(FATAL_ERROR "libevent_pthreads not found")
-    endif()
-    add_library(event_pthreads STATIC IMPORTED)
-    set_target_properties(event_pthreads PROPERTIES IMPORTED_LOCATION ${event_pthreads_lib})
-
-    set(Bitcoin_LIBRARIES 
-        bitcoin_common
-        bitcoin_util
-        bitcoin_cli
-        bitcoin_node
-        bitcoin_wallet
-        bitcoin_consensus
-        bitcoin_crypto
-        secp256k1
-        univalue
-    )
-endif()
+set(Bitcoin_LIBRARIES 
+	bitcoin_common
+	bitcoin_util
+	bitcoin_cli
+	bitcoin_node
+	bitcoin_wallet
+	bitcoin_crypto
+	secp256k1
+	univalue
+)
 
 set(Bitcoin_INCLUDE_DIRS
     ${PROJECT_SOURCE_DIR}/../${BITCOIN_FOLDER}/build/src
@@ -76,16 +35,6 @@ set(PROJECT_LIBRARIES
     ${Bitcoin_LIBRARIES}
     ${Boost_LIBRARIES}
 )
-
-if(WIN32 AND MSVC)
-    target_compile_options("${PROJECT_NAME}" PUBLIC /MT)
-    target_link_options("${PROJECT_NAME}" PUBLIC /INCREMENTAL:NO /NODEFAULTLIB:MSVCRT)
-    set(PROJECT_LIBRARIES ${PROJECT_LIBRARIES} libevent::core libevent::extra)
-elseif(ANDROID OR IOS)
-    #set(PROJECT_LIBRARIES ${PROJECT_LIBRARIES} libevent::core libevent::extra)
-else()
-    set(PROJECT_LIBRARIES ${PROJECT_LIBRARIES} event event_pthreads)
-endif()
 
 target_link_libraries("${PROJECT_NAME}" PRIVATE ${PROJECT_LIBRARIES})
 
