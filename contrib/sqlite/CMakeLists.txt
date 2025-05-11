@@ -23,7 +23,7 @@ if (WIN32)
     target_link_libraries("${PROJECT_NAME}" PRIVATE ws2_32 Mswsock Crypt32)
   endif()
 else()
-  target_link_libraries("$PROJECT_NAME" PRIVATE dl)
+  target_link_libraries("${PROJECT_NAME}" PRIVATE dl)
 endif()
 
 target_compile_definitions("${PROJECT_NAME}" PRIVATE
