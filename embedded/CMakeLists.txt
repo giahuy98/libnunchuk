@@ -27,31 +27,11 @@ set(Bitcoin_INCLUDE_DIRS
     ${PROJECT_SOURCE_DIR}/../contrib/bitcoin/src/leveldb/include
 )
 
-if (WIN32)
-    find_package(Libevent REQUIRED)
-    set(Libevent_LIBRARIES libevent::core libevent::extra)
-elseif (UNIX AND NOT ANDROID AND NOT IOS)
-    function(import_static_library target_name lib_name)
-        find_library(lib_path NAMES ${lib_name})
-        if(NOT lib_path)
-            message(FATAL_ERROR "${lib_name} not found")
-        endif()
-        add_library(${target_name} STATIC IMPORTED)
-        set_target_properties(${target_name} PROPERTIES IMPORTED_LOCATION ${lib_path})
-    endfunction()
-
-    import_static_library(event libevent.a)
-    import_static_library(event_pthreads libevent_pthreads.a)
-
-    set(Libevent_LIBRARIES event event_pthreads)
-endif()
-
 add_library("${PROJECT_NAME}" STATIC embeddedrpc.cpp)
 
 set(PROJECT_LIBRARIES
     ${Bitcoin_LIBRARIES}
     ${Boost_LIBRARIES}
-    ${Libevent_LIBRARIES}
 )
 
 target_link_libraries("${PROJECT_NAME}" PRIVATE ${PROJECT_LIBRARIES})
