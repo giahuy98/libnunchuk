@@ -33,9 +33,8 @@ if(ANDROID)
     set(EVENT__DISABLE_SAMPLES ON)
     add_definitions(-D_GNU_SOURCE)
     add_subdirectory("contrib/bitcoin/depends/${ANDROID_TARGET}/libevent")
-    include_directories("${PROJECT_SOURCE_DIR}/contrib/bitcoin/depends/${ANDROID_TARGET}/include")
-    include_directories("${PROJECT_SOURCE_DIR}/contrib/bitcoin/depends/${ANDROID_TARGET}/libevent/include")
-    include_directories("${PROJECT_BINARY_DIR}/contrib/bitcoin/depends/${ANDROID_TARGET}/libevent/include")
+    add_library(libevent::libevent ALIAS event_extra_static)
+    add_library(libevent::pthreads ALIAS event_pthreads_static)
 elseif(IOS)
     set(CMAKE_FIND_ROOT_PATH 
         "${PROJECT_SOURCE_DIR}/contrib/bitcoin/depends/ios"
@@ -47,9 +46,8 @@ elseif(IOS)
     set(EVENT__DISABLE_REGRESS ON)
     set(EVENT__DISABLE_SAMPLES ON)
     add_subdirectory("contrib/bitcoin/depends/ios/libevent")
-    include_directories("${PROJECT_SOURCE_DIR}/contrib/bitcoin/depends/ios/include")
-    include_directories("${PROJECT_SOURCE_DIR}/contrib/bitcoin/depends/ios/libevent/include")
-    include_directories("${PROJECT_BINARY_DIR}/contrib/bitcoin/depends/ios/libevent/include")    
+    add_library(libevent::libevent ALIAS event_extra_static)
+    add_library(libevent::pthreads ALIAS event_pthreads_static)
 else()
     find_library(event_lib NAMES libevent.a event REQUIRED)
     add_library(libevent::libevent STATIC IMPORTED)
@@ -196,9 +194,6 @@ add_library("${PROJECT_NAME}" STATIC
     src/utils/secretbox.cpp
     src/utils/tweetnacl.c
 )
-if (ANDROID OR IOS)
-    add_dependencies("${PROJECT_NAME}" event_core_static event_extra_static event_pthreads_static)
-endif()
 
 set(PROJECT_LIBRARIES
     ur
