@@ -249,13 +249,15 @@ void NunchukStorage::SetPassphrase(Chain chain, const std::string& value) {
   }
   auto rekey = [&](const bfs::path& old_file, const std::string& id) {
     auto new_file = datadir_ / "tmp" / id;
-    NunchukDb db{chain, id, old_file.string(), passphrase_};
-    if (value.empty()) {
-      db.DecryptDb(new_file.string());
-    } else if (passphrase_.empty()) {
-      db.EncryptDb(new_file.string(), value);
-    } else {
-      return db.ReKey(value);
+    {
+      NunchukDb db{chain, id, old_file.string(), passphrase_};
+      if (value.empty()) {
+        db.DecryptDb(new_file.string());
+      } else if (passphrase_.empty()) {
+        db.EncryptDb(new_file.string(), value);
+      } else {
+        return db.ReKey(value);
+      }
     }
 #ifdef _WIN32
     // Workaround https://github.com/msys2/MSYS2-packages/issues/1937
