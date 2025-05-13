@@ -196,6 +196,9 @@ add_library("${PROJECT_NAME}" STATIC
     src/utils/secretbox.cpp
     src/utils/tweetnacl.c
 )
+if (ANDROID OR IOS)
+    add_dependencies("${PROJECT_NAME}" event_core_static event_extra_static event_pthreads_static)
+endif()
 
 set(PROJECT_LIBRARIES
     ur
