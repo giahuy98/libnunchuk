@@ -241,6 +241,30 @@ void NunchukStorage::Init(const std::string& datadir,
   InitDataDir(datadir_);
 }
 
+static void remove_file_with_retry(const bfs::path& path) {
+  const int MAX_RETRIES = 10;
+  const int SLEEP_MS = 100;
+  std::error_code ec;
+  for (int i = 0; i < MAX_RETRIES; ++i) {
+    bfs::remove(path, ec);
+    if (!ec) {
+      return;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(SLEEP_MS));
+  }
+  throw std::runtime_error("Failed to remove file: " + path.string() + " - " + ec.message());
+}
+
+static void atomic_copy_file(const bfs::path& source, const bfs::path& destination) {
+    bfs::path temp = destination;
+    temp += ".tmp";
+    if (bfs::copy_file(source, temp, bfs::copy_options::overwrite_existing)) {
+        bfs::rename(temp, destination);
+    } else {
+        throw std::runtime_error("Failed to copy file: " + source.string());
+    }
+}
+
 void NunchukStorage::SetPassphrase(Chain chain, const std::string& value) {
   std::unique_lock<std::shared_mutex> lock(access_);
   if (value == passphrase_) {
@@ -262,11 +286,14 @@ void NunchukStorage::SetPassphrase(Chain chain, const std::string& value) {
 #ifdef _WIN32
     // Workaround https://github.com/msys2/MSYS2-packages/issues/1937
     if (bfs::exists(old_file)) {
-      bfs::remove(old_file);
+      remove_file_with_retry(old_file);
     }
-#endif
-    bfs::copy_file(new_file, old_file, bfs::copy_options::overwrite_existing);
+    atomic_copy_file(new_file, old_file);
     bfs::remove(new_file);
+#else    
+    atomic_copy_file(new_file, old_file);
+    bfs::remove(new_file);
+#endif
   };
 
   auto wallets = ListWallets0(chain);
