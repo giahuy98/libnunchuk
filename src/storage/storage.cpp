@@ -241,18 +241,21 @@ void NunchukStorage::Init(const std::string& datadir,
   InitDataDir(datadir_);
 }
 
-static void remove_file_with_retry(const bfs::path& path) {
-  const int MAX_RETRIES = 10;
+static bfs::path rename_file_with_retry(const bfs::path& path) {
+  bfs::path temp = path;
+  temp += ".tmp";
+
+  const int MAX_RETRIES = 100;
   const int SLEEP_MS = 100;
   std::error_code ec;
   for (int i = 0; i < MAX_RETRIES; ++i) {
-    bfs::remove(path, ec);
+    bfs::rename(path, temp, ec);
     if (!ec) {
-      return;
+      return temp;
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(SLEEP_MS));
   }
-  throw std::runtime_error("Failed to remove file: " + path.string() + " - " + ec.message());
+  throw std::runtime_error("Failed to rename file: " + path.string() + " - " + ec.message());
 }
 
 static void atomic_copy_file(const bfs::path& source, const bfs::path& destination) {
@@ -285,11 +288,10 @@ void NunchukStorage::SetPassphrase(Chain chain, const std::string& value) {
     }
 #ifdef _WIN32
     // Workaround https://github.com/msys2/MSYS2-packages/issues/1937
-    if (bfs::exists(old_file)) {
-      remove_file_with_retry(old_file);
-    }
+    bfs::path temp = rename_file_with_retry(old_file);
     atomic_copy_file(new_file, old_file);
     bfs::remove(new_file);
+    bfs::remove(temp);
 #else    
     atomic_copy_file(new_file, old_file);
     bfs::remove(new_file);
