@@ -243,7 +243,7 @@ void NunchukStorage::Init(const std::string& datadir,
 
 static bfs::path rename_file_with_retry(const bfs::path& path) {
   bfs::path temp = path;
-  temp += ".tmp";
+  temp += ".rename.tmp";
 
   const int MAX_RETRIES = 100;
   const int SLEEP_MS = 100;
@@ -258,9 +258,9 @@ static bfs::path rename_file_with_retry(const bfs::path& path) {
   throw std::runtime_error("Failed to rename file: " + path.string() + " - " + ec.message());
 }
 
-static void atomic_copy_file(const bfs::path& source, const bfs::path& destination) {
+static void copy_file(const bfs::path& source, const bfs::path& destination) {
     bfs::path temp = destination;
-    temp += ".tmp";
+    temp += ".copy.tmp";
     if (bfs::copy_file(source, temp, bfs::copy_options::overwrite_existing)) {
         bfs::rename(temp, destination);
     } else {
@@ -276,6 +276,9 @@ void NunchukStorage::SetPassphrase(Chain chain, const std::string& value) {
   }
   auto rekey = [&](const bfs::path& old_file, const std::string& id) {
     auto new_file = datadir_ / "tmp" / id;
+    if (bfs::exists(new_file)) {
+      bfs::remove(new_file);
+    }
     {
       NunchukDb db{chain, id, old_file.string(), passphrase_};
       if (value.empty()) {
@@ -289,11 +292,16 @@ void NunchukStorage::SetPassphrase(Chain chain, const std::string& value) {
 #ifdef _WIN32
     // Workaround https://github.com/msys2/MSYS2-packages/issues/1937
     bfs::path temp = rename_file_with_retry(old_file);
-    atomic_copy_file(new_file, old_file);
+    try {
+      copy_file(new_file, old_file);
+    } catch (...) {    
+      bfs::rename(temp, old_file);
+      throw;
+    }
     bfs::remove(new_file);
     bfs::remove(temp);
-#else    
-    atomic_copy_file(new_file, old_file);
+#else
+    copy_file(new_file, old_file);
     bfs::remove(new_file);
 #endif
   };
