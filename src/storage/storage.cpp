@@ -258,7 +258,7 @@ static bfs::path rename_file_with_retry(const bfs::path& path) {
   throw std::runtime_error("Failed to rename file: " + path.string() + " - " + ec.message());
 }
 
-static void copy_file(const bfs::path& source, const bfs::path& destination) {
+static void safe_copy_file(const bfs::path& source, const bfs::path& destination) {
     bfs::path temp = destination;
     temp += ".copy.tmp";
     if (bfs::copy_file(source, temp, bfs::copy_options::overwrite_existing)) {
@@ -293,7 +293,7 @@ void NunchukStorage::SetPassphrase(Chain chain, const std::string& value) {
     // Workaround https://github.com/msys2/MSYS2-packages/issues/1937
     bfs::path temp = rename_file_with_retry(old_file);
     try {
-      copy_file(new_file, old_file);
+      safe_copy_file(new_file, old_file);
     } catch (...) {    
       bfs::rename(temp, old_file);
       throw;
@@ -301,7 +301,7 @@ void NunchukStorage::SetPassphrase(Chain chain, const std::string& value) {
     bfs::remove(new_file);
     bfs::remove(temp);
 #else
-    copy_file(new_file, old_file);
+    safe_copy_file(new_file, old_file);
     bfs::remove(new_file);
 #endif
   };
