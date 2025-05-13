@@ -257,6 +257,12 @@ void NunchukStorage::SetPassphrase(Chain chain, const std::string& value) {
     } else {
       return db.ReKey(value);
     }
+#ifdef _WIN32
+    // Workaround https://github.com/msys2/MSYS2-packages/issues/1937
+    if (bfs::exists(old_file)) {
+      bfs::remove(old_file);
+    }
+#endif
     bfs::copy_file(new_file, old_file, bfs::copy_options::overwrite_existing);
     bfs::remove(new_file);
   };
