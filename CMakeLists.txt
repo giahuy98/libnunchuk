@@ -20,9 +20,10 @@ if(ANDROID)
         set(ANDROID_TARGET "armv7a-linux-androideabi")
     endif()
 
-    set(BOOST_ROOT "${PROJECT_SOURCE_DIR}/contrib/bitcoin/depends/${ANDROID_TARGET}")
-    set(OPENSSL_ROOT_DIR "${PROJECT_SOURCE_DIR}/contrib/openssl/${ANDROID_TARGET}")
-    list(PREPEND CMAKE_FIND_ROOT_PATH "${OPENSSL_ROOT_DIR}")
+    set(CMAKE_FIND_ROOT_PATH
+        "${PROJECT_SOURCE_DIR}/contrib/bitcoin/depends/${ANDROID_TARGET}"
+        "${PROJECT_SOURCE_DIR}/contrib/openssl/${ANDROID_TARGET}"
+    )
     set(THREADS_PREFER_PTHREAD_FLAG ON)
     set(EVENT__DISABLE_OPENSSL ON)
     set(EVENT__LIBRARY_TYPE STATIC CACHE STRING "Override library type for libevent")
@@ -35,8 +36,10 @@ if(ANDROID)
     add_library(libevent::libevent ALIAS event_extra_static)
     add_library(libevent::pthreads ALIAS event_pthreads_static)
 elseif(IOS)
-    set(BOOST_ROOT "${PROJECT_SOURCE_DIR}/contrib/bitcoin/depends/ios")
-    set(OPENSSL_ROOT_DIR "${PROJECT_SOURCE_DIR}/contrib/openssl/${PLATFORM}")
+    set(CMAKE_FIND_ROOT_PATH
+        "${PROJECT_SOURCE_DIR}/contrib/bitcoin/depends/ios"
+        "${PROJECT_SOURCE_DIR}/contrib/openssl/${PLATFORM}"
+    )
     set(EVENT__DISABLE_OPENSSL ON)
     set(EVENT__LIBRARY_TYPE STATIC CACHE STRING "Override library type for libevent")
     set(EVENT__DISABLE_TESTS ON)
@@ -60,6 +63,7 @@ endif()
 
 find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
+find_package(Boost 1.47.0 REQUIRED)
 
 add_subdirectory(contrib/sqlite)
 add_library(SQLite::SQLite3 ALIAS sqlcipher)
@@ -126,8 +130,6 @@ add_library(ur-2 STATIC
     "contrib/bc-ur-2/src/utils.cpp"
     "contrib/bc-ur-2/src/xoshiro256.cpp"
 )
-
-find_package(Boost 1.47.0 REQUIRED)
 
 target_include_directories(ur-2 PUBLIC
     "${PROJECT_SOURCE_DIR}/contrib/bc-ur-2/src"
