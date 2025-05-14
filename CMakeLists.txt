@@ -20,10 +20,8 @@ if(ANDROID)
         set(ANDROID_TARGET "armv7a-linux-androideabi")
     endif()
 
-    set(CMAKE_FIND_ROOT_PATH 
-        "${PROJECT_SOURCE_DIR}/contrib/bitcoin/depends/${ANDROID_TARGET}"
-        "${PROJECT_SOURCE_DIR}/contrib/openssl/${ANDROID_TARGET}"
-    )
+    set(BOOST_ROOT "${PROJECT_SOURCE_DIR}/contrib/bitcoin/depends/${ANDROID_TARGET}")
+    set(OPENSSL_ROOT_DIR "${PROJECT_SOURCE_DIR}/contrib/openssl/${ANDROID_TARGET}")
     set(THREADS_PREFER_PTHREAD_FLAG ON)
     set(EVENT__DISABLE_OPENSSL ON)
     set(EVENT__LIBRARY_TYPE STATIC CACHE STRING "Override library type for libevent")
@@ -36,9 +34,8 @@ if(ANDROID)
     add_library(libevent::libevent ALIAS event_extra_static)
     add_library(libevent::pthreads ALIAS event_pthreads_static)
 elseif(IOS)
-    set(CMAKE_FIND_ROOT_PATH 
-        "${PROJECT_SOURCE_DIR}/contrib/bitcoin/depends/ios"
-        "${PROJECT_SOURCE_DIR}/contrib/openssl/${PLATFORM}")
+    set(BOOST_ROOT "${PROJECT_SOURCE_DIR}/contrib/bitcoin/depends/ios")
+    set(OPENSSL_ROOT_DIR "${PROJECT_SOURCE_DIR}/contrib/openssl/${PLATFORM}")
     set(EVENT__DISABLE_OPENSSL ON)
     set(EVENT__LIBRARY_TYPE STATIC CACHE STRING "Override library type for libevent")
     set(EVENT__DISABLE_TESTS ON)
@@ -53,11 +50,11 @@ else()
     add_library(libevent::libevent STATIC IMPORTED)
     set_target_properties(libevent::libevent PROPERTIES IMPORTED_LOCATION ${event_lib})
 
-	if (NOT WIN32)
-		find_library(event_pthreads_lib NAMES libevent_pthreads.a event_pthreads REQUIRED)
-		add_library(libevent::pthreads STATIC IMPORTED)
-		set_target_properties(libevent::pthreads PROPERTIES IMPORTED_LOCATION ${event_pthreads_lib})
-	endif()
+  if (NOT WIN32)
+    find_library(event_pthreads_lib NAMES libevent_pthreads.a event_pthreads REQUIRED)
+    add_library(libevent::pthreads STATIC IMPORTED)
+    set_target_properties(libevent::pthreads PROPERTIES IMPORTED_LOCATION ${event_pthreads_lib})
+  endif()
 endif()
 
 find_package(OpenSSL REQUIRED)
@@ -133,7 +130,6 @@ find_package(Boost 1.47.0 REQUIRED)
 
 target_include_directories(ur-2 PUBLIC
     "${PROJECT_SOURCE_DIR}/contrib/bc-ur-2/src"
-    ${Boost_INCLUDE_DIRS}
     "${PROJECT_SOURCE_DIR}/contrib/bitcoin/depends/${ANDROID_TARGET}/include"
 )
 
@@ -204,9 +200,9 @@ set(PROJECT_LIBRARIES
 
 if(WIN32)
     if(MSVC)
-		target_compile_options("${PROJECT_NAME}" PUBLIC /MT)
-		target_link_options("${PROJECT_NAME}" PUBLIC /INCREMENTAL:NO /NODEFAULTLIB:MSVCRT)
-	endif()
+    target_compile_options("${PROJECT_NAME}" PUBLIC /MT)
+    target_link_options("${PROJECT_NAME}" PUBLIC /INCREMENTAL:NO /NODEFAULTLIB:MSVCRT)
+  endif()
     set(PROJECT_LIBRARIES sqlcipher ${PROJECT_LIBRARIES} crypt32 ws2_32)
 elseif(APPLE)
     set(PROJECT_LIBRARIES sqlcipher ${PROJECT_LIBRARIES})
