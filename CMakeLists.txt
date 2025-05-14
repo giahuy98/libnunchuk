@@ -63,7 +63,6 @@ endif()
 
 find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
-find_package(Boost 1.47.0 REQUIRED)
 
 add_subdirectory(contrib/sqlite)
 add_library(SQLite::SQLite3 ALIAS sqlcipher)
@@ -130,6 +129,8 @@ add_library(ur-2 STATIC
     "contrib/bc-ur-2/src/utils.cpp"
     "contrib/bc-ur-2/src/xoshiro256.cpp"
 )
+
+find_package(Boost 1.47.0 REQUIRED)
 
 target_include_directories(ur-2 PUBLIC
     "${PROJECT_SOURCE_DIR}/contrib/bc-ur-2/src"
