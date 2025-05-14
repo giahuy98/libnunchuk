@@ -22,6 +22,7 @@ if(ANDROID)
 
     set(BOOST_ROOT "${PROJECT_SOURCE_DIR}/contrib/bitcoin/depends/${ANDROID_TARGET}")
     set(OPENSSL_ROOT_DIR "${PROJECT_SOURCE_DIR}/contrib/openssl/${ANDROID_TARGET}")
+    list(PREPEND CMAKE_FIND_ROOT_PATH "${OPENSSL_ROOT_DIR}")
     set(THREADS_PREFER_PTHREAD_FLAG ON)
     set(EVENT__DISABLE_OPENSSL ON)
     set(EVENT__LIBRARY_TYPE STATIC CACHE STRING "Override library type for libevent")
