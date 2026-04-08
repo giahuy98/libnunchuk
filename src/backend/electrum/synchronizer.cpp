@@ -19,7 +19,9 @@
 #include <algorithm>
 #include <limits>
 #include <numeric>
+#include <tinyformat.h>
 #include <utils/addressutils.hpp>
+#include <utils/connectionlog.hpp>
 #include <utils/stringutils.hpp>
 #include <utils/txutils.hpp>
 #include <thread>
@@ -329,19 +331,33 @@ std::map<std::string, std::string> ElectrumSynchronizer::SubscribeAddresses(
 }
 
 void ElectrumSynchronizer::BlockchainSync(Chain chain) {
-  connection_listener_(ConnectionStatus::OFFLINE, 0);
+  const auto notify_connection_listener = [&](ConnectionStatus status,
+                                              int progress) {
+    ConnectionDebugLog(
+        "listener",
+        strprintf("blockchain connection status=%s progress=%d",
+                  ConnectionStatusName(status), progress));
+    connection_listener_(status, progress);
+  };
+
+  notify_connection_listener(ConnectionStatus::OFFLINE, 0);
   {
     std::unique_lock<std::mutex> lock_(status_mutex_);
     if (status_ != Status::READY && status_ != Status::SYNCING) return;
+    ConnectionDebugLog("listener", "registering electrum header listener");
     auto header = client_->blockchain_headers_subscribe([&](json rs) {
       chain_tip_ = rs[0]["height"];
+      ConnectionDebugLog("listener",
+                         strprintf("header notification height=%d",
+                                   chain_tip_));
       storage_->SetChainTip(app_settings_.get_chain(), chain_tip_);
       block_listener_(rs[0]["height"], rs[0]["hex"]);
     });
     chain_tip_ = header["height"];
-    connection_listener_(ConnectionStatus::SYNCING, 0);
+    notify_connection_listener(ConnectionStatus::SYNCING, 0);
     storage_->SetChainTip(chain, header["height"]);
     block_listener_(header["height"], header["hex"]);
+    ConnectionDebugLog("listener", "registering electrum scripthash listener");
     client_->scripthash_add_listener([&](json notification) {
       OnScripthashStatusChange(app_settings_.get_chain(), notification);
     });
@@ -392,10 +408,10 @@ void ElectrumSynchronizer::BlockchainSync(Chain chain) {
     Amount unconfirmed_balance =
         storage_->GetUnconfirmedBalance(chain, wallet_id);
     balances_listener_(wallet_id, balance, unconfirmed_balance);
-    connection_listener_(ConnectionStatus::SYNCING,
-                         ++process * 100 / wallet_ids.size());
+    notify_connection_listener(ConnectionStatus::SYNCING,
+                               ++process * 100 / wallet_ids.size());
   }
-  connection_listener_(ConnectionStatus::ONLINE, 100);
+  notify_connection_listener(ConnectionStatus::ONLINE, 100);
 }
 
 void ElectrumSynchronizer::Broadcast(const std::string& raw_tx) {

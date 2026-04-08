@@ -19,6 +19,8 @@
 
 #include <algorithm>
 #include <groupservice.h>
+#include <tinyformat.h>
+#include <utils/connectionlog.hpp>
 #include <utils/json.hpp>
 #include <utils/loguru.hpp>
 #include <utils/secretbox.h>
@@ -265,12 +267,16 @@ void NunchukImpl::EnableGroupWallet(const std::string& osName,
 void NunchukImpl::StartListenEvents() {
   SubscribeGroups(storage_->GetGroupSandboxIds(chain_),
                   storage_->GetGroupWalletIds(chain_), true);
+  ConnectionDebugLog("listener", "registered group event listener");
   group_service_.StartListenEvents([&](const nlohmann::json& event) {
     time_t ts = event["timestamp_ms"].get<int64_t>() / 1000;
     std::string eid = event["id"];
     json payload = event["payload"];
     std::string type = payload["type"];
     json data = payload["data"];
+    ConnectionDebugLog("listener",
+                       strprintf("group event received id=%s type=%s",
+                                 eid.c_str(), type.c_str()));
     if (payload["type"] == "online") {
       std::string groupId = payload["group_id"];
       auto count = payload["data"]["members"].size();

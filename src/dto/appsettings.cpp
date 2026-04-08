@@ -34,6 +34,7 @@ std::vector<std::string> AppSettings::get_testnet_servers() const {
 }
 std::string AppSettings::get_hwi_path() const { return hwi_path_; }
 std::string AppSettings::get_storage_path() const { return storage_path_; }
+std::string AppSettings::get_log_file_path() const { return log_file_path_; }
 bool AppSettings::use_proxy() const { return enable_proxy_; }
 std::string AppSettings::get_proxy_host() const { return proxy_host_; }
 int AppSettings::get_proxy_port() const { return proxy_port_; }
@@ -68,6 +69,9 @@ void AppSettings::set_signet_servers(const std::vector<std::string>& value) {
 void AppSettings::set_hwi_path(const std::string& value) { hwi_path_ = value; }
 void AppSettings::set_storage_path(const std::string& value) {
   storage_path_ = value;
+}
+void AppSettings::set_log_file_path(const std::string& value) {
+  log_file_path_ = value;
 }
 void AppSettings::enable_proxy(bool value) { enable_proxy_ = value; }
 void AppSettings::set_proxy_host(const std::string& value) {
