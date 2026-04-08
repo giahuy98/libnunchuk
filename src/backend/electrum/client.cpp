@@ -19,10 +19,12 @@
 #include <boost/asio/ip/address.hpp>
 #include <iterator>
 #include <utils/loguru.hpp>
+#include <utils/connectionlog.hpp>
 #include <utils/errorutils.hpp>
 #include <utils/stringutils.hpp>
 #include <boost/tokenizer.hpp>
 #include <boost/algorithm/string.hpp>
+#include <tinyformat.h>
 
 using namespace boost::asio;
 
@@ -87,6 +89,7 @@ ElectrumClient::ElectrumClient(const AppSettings& appsettings,
       timer_(io_service_, interval_) {
   disconnect_signal_.connect(on_disconnect);
   std::string server_url = GetServerAddress(appsettings);
+  const std::string configured_server_url = server_url;
 
   size_t colonDoubleSlash = server_url.find("://");
   if (colonDoubleSlash != std::string::npos) {
@@ -111,6 +114,11 @@ ElectrumClient::ElectrumClient(const AppSettings& appsettings,
   }
 
   is_secure_ = boost::iequals(protocol_, "ssl");
+  ConnectionDebugLog(
+      "electrum",
+      strprintf("initialize server=%s host=%s port=%d secure=%s proxy=%s",
+                configured_server_url.c_str(), host_.c_str(), port_,
+                ConnectionLogBool(is_secure_), ConnectionLogBool(use_proxy_)));
   if (is_secure_) {
     ssl::context ctx(ssl::context::tls);
     if (!appsettings.get_certificate_file().empty()) {
@@ -139,6 +147,9 @@ ElectrumClient::~ElectrumClient() {
 
 void ElectrumClient::handle_error(const std::string& where,
                                   const std::string& message) {
+  ConnectionDebugLog("electrum",
+                     strprintf("disconnect where=%s message=%s",
+                               where.c_str(), message.c_str()));
   LOG_F(ERROR, "%s: %s", where.c_str(), message.c_str());
   stopped_ = true;
   for (auto &&it = callback_.begin(), next = it; it != callback_.end();
@@ -365,6 +376,7 @@ std::map<std::string, std::string> ElectrumClient::subscribe_multi_scripthash(
 }
 
 void ElectrumClient::start() {
+  ConnectionDebugLog("electrum", "starting io and signal workers");
   io_thread_ = std::thread([&]() {
     try {
       io_service_.run();
@@ -384,12 +396,19 @@ void ElectrumClient::start() {
     support_batch_request_ = boost::starts_with(version, "ElectrumX");
     support_batch_request_ |= boost::starts_with(version, "electrs/");
     support_batch_request_ |= boost::istarts_with(version, "fulcrum");
+    ConnectionDebugLog(
+        "electrum",
+        strprintf("server.version=%s batch_requests=%s", version.c_str(),
+                  ConnectionLogBool(support_batch_request_)));
   } catch (...) {
     support_batch_request_ = false;
+    ConnectionDebugLog("electrum",
+                       "server.version failed, batch requests disabled");
   }
 }
 
 void ElectrumClient::stop() {
+  ConnectionDebugLog("electrum", "stopping client");
   stopped_ = true;
   signal_worker_.reset();
   io_service_.stop();
@@ -409,13 +428,22 @@ void ElectrumClient::enqueue_message(const std::string& jsonrpc_request) {
 void ElectrumClient::socket_connect() {
   std::string h = use_proxy_ ? proxy_host_ : host_;
   int p = use_proxy_ ? proxy_port_ : port_;
+  ConnectionDebugLog(
+      "electrum",
+      strprintf("resolving endpoint host=%s port=%d target=%s:%d via_proxy=%s",
+                h.c_str(), p, host_.c_str(), port_,
+                ConnectionLogBool(use_proxy_)));
   ip::tcp::resolver::query resolver_query(h, std::to_string(p));
   ip::tcp::resolver resolver(io_service_);
   boost::system::error_code error;
   auto resolve_rs = resolver.resolve(resolver_query, error);
   if (error.value() != 0) {
+    ConnectionDebugLog("electrum",
+                       strprintf("resolve failed host=%s port=%d error=%s",
+                                 h.c_str(), p, error.message().c_str()));
     return handle_error("socket_connect", "can not resolve host");
   }
+  ConnectionDebugLog("electrum", "resolve succeeded, opening socket");
   async_connect(
       is_secure_ ? secure_socket_->next_layer() : socket_->lowest_layer(),
       resolve_rs,
@@ -459,8 +487,18 @@ void ElectrumClient::socket_write() {
 }
 
 void ElectrumClient::ping(const boost::system::error_code& error) {
+  if (error) {
+    ConnectionDebugLog("electrum",
+                       strprintf("ping timer error=%s",
+                                 error.message().c_str()));
+    return;
+  }
   time_t current = std::time(0);
   if (current - last_read_ > 10) {
+    ConnectionDebugLog(
+        "electrum",
+        strprintf("ping timeout last_read_age=%lld seconds",
+                  static_cast<long long>(current - last_read_)));
     return handle_error("handle_ping", "no pong");
   }
 
@@ -473,13 +511,24 @@ void ElectrumClient::ping(const boost::system::error_code& error) {
 
 void ElectrumClient::handle_connect(const boost::system::error_code& error) {
   if (error) {
+    ConnectionDebugLog("electrum",
+                       strprintf("connect failed error=%s",
+                                 error.message().c_str()));
     return handle_error("handle_connect", error.message());
   }
+  ConnectionDebugLog(
+      "electrum",
+      strprintf("tcp connected host=%s port=%d secure=%s proxy=%s",
+                host_.c_str(), port_, ConnectionLogBool(is_secure_),
+                ConnectionLogBool(use_proxy_)));
   if (!handle_socks5()) {
     return handle_error("handle_connect", "handle socks5 error");
   }
 
   if (is_secure_) {
+    ConnectionDebugLog("electrum",
+                       strprintf("starting tls handshake host=%s",
+                                 host_.c_str()));
     secure_socket_->lowest_layer().set_option(ip::tcp::no_delay(true));
     // Set SNI if host is not an IP address
     std::string host = use_proxy_ ? proxy_host_ : host_;
@@ -497,9 +546,13 @@ void ElectrumClient::handle_connect(const boost::system::error_code& error) {
           return preverified;
         });
     secure_socket_->handshake(ssl::stream_base::client);
+    ConnectionDebugLog("electrum",
+                       strprintf("tls handshake completed host=%s",
+                                 host_.c_str()));
   }
 
   connected_ = true;
+  ConnectionDebugLog("electrum", "connection established, starting read loop");
   socket_read();
   socket_write();
   timer_.async_wait(
@@ -561,6 +614,10 @@ void ElectrumClient::handle_write(const boost::system::error_code& error) {
 bool ElectrumClient::handle_socks5() {
   if (!use_proxy_) return true;
   bool auth = !proxy_username_.empty() && !proxy_password_.empty();
+  ConnectionDebugLog(
+      "electrum",
+      strprintf("starting socks5 handshake proxy=%s:%d auth=%s",
+                proxy_host_.c_str(), proxy_port_, ConnectionLogBool(auth)));
 
   auto my_write = [&](const std::vector<uint8_t>& req) {
     write(is_secure_ ? secure_socket_->next_layer() : *socket_, buffer(req));
@@ -636,6 +693,10 @@ bool ElectrumClient::handle_socks5() {
       return false;
   }
   my_read(resp, 2);
+  ConnectionDebugLog(
+      "electrum",
+      strprintf("socks5 tunnel established target=%s:%d", host_.c_str(),
+                port_));
   return true;
 }
 

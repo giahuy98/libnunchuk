@@ -35,6 +35,7 @@
 #include <utils/silentpayment.hpp>
 #include <script/signingprovider.h>
 #include <utils/json.hpp>
+#include <utils/connectionlog.hpp>
 #include <utils/loguru.hpp>
 #include <utils/quote.hpp>
 #include <utils/multisigconfig.hpp>
@@ -77,6 +78,13 @@ static HWITapsigner::Chain NunchukChain2TapsignerChain(Chain chain) {
   throw NunchukException(NunchukException::INVALID_CHAIN, "Invalid chain");
 }
 
+static std::string ResolveConnectionLogFilePath(const AppSettings& appsettings) {
+  if (!appsettings.get_log_file_path().empty()) {
+    return appsettings.get_log_file_path();
+  }
+  return DefaultConnectionLogFilePath(appsettings.get_storage_path());
+}
+
 // Nunchuk implement
 NunchukImpl::NunchukImpl(const AppSettings& appsettings,
                          const std::string& passphrase,
@@ -88,6 +96,7 @@ NunchukImpl::NunchukImpl(const AppSettings& appsettings,
       storage_(NunchukStorage::get(account_)),
       hwi_tapsigner_(MakeHWITapsigner(NunchukChain2TapsignerChain(chain_))),
       group_service_(app_settings_.get_group_server()) {
+  SetConnectionLogFilePath(ResolveConnectionLogFilePath(app_settings_));
   CoreUtils::getInstance().SetChain(chain_);
   storage_->Init(app_settings_.get_storage_path(), passphrase);
   storage_->MaybeMigrate(chain_);
@@ -1576,6 +1585,7 @@ AppSettings NunchukImpl::GetAppSettings() { return app_settings_; }
 
 AppSettings NunchukImpl::UpdateAppSettings(const AppSettings& settings) {
   app_settings_ = settings;
+  SetConnectionLogFilePath(ResolveConnectionLogFilePath(app_settings_));
   chain_ = app_settings_.get_chain();
   hwi_.SetPath(app_settings_.get_hwi_path());
   hwi_.SetChain(chain_);

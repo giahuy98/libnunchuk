@@ -189,6 +189,7 @@ add_library("${PROJECT_NAME}" STATIC
     src/storage/roomdb.cpp
     src/storage/tapprotocoldb.cpp
     src/storage/groupdb.cpp
+    src/utils/connectionlog.cpp
     src/utils/loguru.cpp
     src/utils/ndef.hpp
     src/utils/enumconverter.hpp

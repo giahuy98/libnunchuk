@@ -28,9 +28,11 @@
 #include <utils/secretbox.h>
 #include <utils/stringutils.hpp>
 #include <utils/enumconverter.hpp>
+#include <utils/connectionlog.hpp>
 #include <descriptor.h>
 #include <boost/algorithm/string.hpp>
 #include <coreutils.h>
+#include <tinyformat.h>
 
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #define CPPHTTPLIB_CONNECTION_TIMEOUT_SECOND 5
@@ -1562,15 +1564,22 @@ void GroupService::StartListenEvents(
 
     try {
       callback(json::parse(raw));
-    } catch (...) {
-      // ignore error
+    } catch (const std::exception& e) {
+      ConnectionDebugLog(
+          "group-sse",
+          strprintf("failed to parse event payload error=%s payload=%s",
+                    e.what(), std::string(raw.substr(0, 200)).c_str()));
     }
   };
 
   if (!stop_) {
+    ConnectionDebugLog("group-sse", "restart requested, stopping active stream");
     StopListenEvents();
   }
 
+  ConnectionDebugLog("group-sse",
+                     strprintf("starting listener base_url=%s",
+                               baseUrl_.c_str()));
   sse_thread_ = std::thread([&, handle_event = std::move(handle_event)] {
     std::string auth = (std::string("Bearer ") + accessToken_);
     httplib::Headers headers = {{"Device-Token", deviceToken_},
@@ -1581,11 +1590,28 @@ void GroupService::StartListenEvents(
     sse_client_->set_read_timeout(std::chrono::hours(24));
     sse_client_->set_keep_alive(true);
     stop_ = false;
+    ConnectionDebugLog("group-sse", "listener thread started");
     while (!stop_) {
       std::string buffer;
-      sse_client_->Get(
+      bool received_stream_data = false;
+      ConnectionDebugLog("group-sse", "opening SSE stream");
+      auto result = sse_client_->Get(
           "/v1.1/shared-wallets/events/sse", headers,
+          [&](const httplib::Response& response) {
+            ConnectionDebugLog(
+                "group-sse",
+                strprintf("SSE response status=%d content_type=%s",
+                          response.status,
+                          response.get_header_value("Content-Type").c_str()));
+            return true;
+          },
           [&](const char* data, size_t data_length) {
+            if (!received_stream_data) {
+              received_stream_data = true;
+              ConnectionDebugLog(
+                  "group-sse",
+                  strprintf("received first SSE chunk bytes=%zu", data_length));
+            }
             buffer.append(data, data_length);
             size_t pos;
             while ((pos = buffer.find("\n\n")) != std::string::npos) {
@@ -1597,14 +1623,27 @@ void GroupService::StartListenEvents(
             }
             return !stop_;
           });
+      if (result) {
+        ConnectionDebugLog(
+            "group-sse",
+            strprintf("SSE stream ended status=%d", result->status));
+      } else {
+        ConnectionDebugLog(
+            "group-sse",
+            strprintf("SSE stream transport error=%d",
+                      static_cast<int>(result.error())));
+      }
       if (stop_) break;
+      ConnectionDebugLog("group-sse", "retrying SSE stream in 3 seconds");
       std::this_thread::sleep_for(std::chrono::seconds(3));
     }
+    ConnectionDebugLog("group-sse", "listener thread exiting");
   });
 }
 
 void GroupService::StopListenEvents() {
   stop_ = true;
+  ConnectionDebugLog("group-sse", "stop requested");
   if (sse_client_) {
     sse_client_->stop();
   }

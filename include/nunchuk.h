@@ -1366,6 +1366,7 @@ class NUNCHUK_EXPORT AppSettings {
   std::vector<std::string> get_testnet_servers() const;
   std::string get_hwi_path() const;
   std::string get_storage_path() const;
+  std::string get_log_file_path() const;
   bool use_proxy() const;
   std::string get_proxy_host() const;
   int get_proxy_port() const;
@@ -1385,6 +1386,7 @@ class NUNCHUK_EXPORT AppSettings {
   void set_testnet_servers(const std::vector<std::string>& value);
   void set_hwi_path(const std::string& value);
   void set_storage_path(const std::string& value);
+  void set_log_file_path(const std::string& value);
   void enable_proxy(bool value);
   void set_proxy_host(const std::string& value);
   void set_proxy_port(int value);
@@ -1405,6 +1407,7 @@ class NUNCHUK_EXPORT AppSettings {
   std::vector<std::string> testnet_servers_;
   std::string hwi_path_;
   std::string storage_path_;
+  std::string log_file_path_;
   bool enable_proxy_;
   std::string proxy_host_;
   int proxy_port_;
