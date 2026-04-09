@@ -181,6 +181,16 @@ ElectrumClient::~ElectrumClient() {
 
 void ElectrumClient::handle_error(const std::string& where,
                                   const std::string& message) {
+  if (stopped_.exchange(true)) {
+    ConnectionDebugLog(
+        "electrum",
+        strprintf("%s duplicate disconnect ignored where=%s message=%s",
+                  ElectrumLogPrefix(synchronizer_id_, instance_id_,
+                                    static_cast<const void*>(this))
+                      .c_str(),
+                  where.c_str(), message.c_str()));
+    return;
+  }
   ConnectionDebugLog(
       "electrum",
       strprintf("%s disconnect where=%s message=%s",
@@ -189,7 +199,6 @@ void ElectrumClient::handle_error(const std::string& where,
                     .c_str(),
                 where.c_str(), message.c_str()));
   LOG_F(ERROR, "%s: %s", where.c_str(), message.c_str());
-  stopped_ = true;
   for (auto &&it = callback_.begin(), next = it; it != callback_.end();
        it = next) {
     ++next;

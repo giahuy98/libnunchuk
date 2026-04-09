@@ -71,6 +71,13 @@ void ElectrumSynchronizer::Run() {
                                        instance_id())));
       return;
     }
+    if (status_ == Status::CONNECTING) {
+      ConnectionDebugLog(
+          "sync",
+          strprintf("sync=%llu Run ignored because status=CONNECTING",
+                    static_cast<unsigned long long>(instance_id())));
+      return;
+    }
     status_ = Status::CONNECTING;
     status_cv_.notify_all();
   }
@@ -87,6 +94,17 @@ void ElectrumSynchronizer::Run() {
         "sync",
         strprintf("sync=%llu connect task begin", static_cast<unsigned long long>(
                                                    instance_id())));
+    {
+      std::lock_guard<std::mutex> guard(status_mutex_);
+      if (status_ != Status::CONNECTING) {
+        ConnectionDebugLog(
+            "sync",
+            strprintf(
+                "sync=%llu stale connect task ignored before client creation",
+                static_cast<unsigned long long>(instance_id())));
+        return;
+      }
+    }
     try {
       if (client_) {
         ConnectionDebugLog(
