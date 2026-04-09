@@ -18,10 +18,38 @@
 #include <backend/electrum/synchronizer.h>
 #include <backend/corerpc/synchronizer.h>
 #include <coreutils.h>
+#include <tinyformat.h>
+#include <utils/connectionlog.hpp>
 
 using namespace boost::asio;
 
 namespace nunchuk {
+
+namespace {
+
+const char* TransactionStatusName(TransactionStatus status) {
+  switch (status) {
+    case TransactionStatus::PENDING_SIGNATURES:
+      return "PENDING_SIGNATURES";
+    case TransactionStatus::READY_TO_BROADCAST:
+      return "READY_TO_BROADCAST";
+    case TransactionStatus::NETWORK_REJECTED:
+      return "NETWORK_REJECTED";
+    case TransactionStatus::PENDING_CONFIRMATION:
+      return "PENDING_CONFIRMATION";
+    case TransactionStatus::REPLACED:
+      return "REPLACED";
+    case TransactionStatus::CONFIRMED:
+      return "CONFIRMED";
+    case TransactionStatus::PENDING_NONCE:
+      return "PENDING_NONCE";
+    case TransactionStatus::DELETED:
+      return "DELETED";
+  }
+  return "UNKNOWN";
+}
+
+}  // namespace
 
 std::unique_ptr<Synchronizer> MakeSynchronizer(const AppSettings& appsettings,
                                                const std::string& account) {
@@ -119,7 +147,54 @@ void Synchronizer::AddBlockchainConnectionListener(
 void Synchronizer::NotifyTransactionUpdate(const std::string& wallet_id,
                                            const std::string& tx_id,
                                            TransactionStatus status) {
+  EmitTransactionListener(wallet_id, tx_id, status);
+}
+
+void Synchronizer::EmitBalanceListener(const std::string& wallet_id,
+                                       Amount balance) {
+  ConnectionDebugLog("listener",
+                     strprintf("dispatch balance wallet=%s balance=%lld",
+                               wallet_id.c_str(),
+                               static_cast<long long>(balance)));
+  balance_listener_(wallet_id, balance);
+}
+
+void Synchronizer::EmitBalancesListener(const std::string& wallet_id,
+                                        Amount balance,
+                                        Amount unconfirmed_balance) {
+  ConnectionDebugLog(
+      "listener",
+      strprintf(
+          "dispatch balances wallet=%s balance=%lld unconfirmed_balance=%lld",
+          wallet_id.c_str(), static_cast<long long>(balance),
+          static_cast<long long>(unconfirmed_balance)));
+  balances_listener_(wallet_id, balance, unconfirmed_balance);
+}
+
+void Synchronizer::EmitBlockListener(int height, const std::string& block_hash) {
+  ConnectionDebugLog(
+      "listener",
+      strprintf("dispatch block height=%d hash=%s", height, block_hash.c_str()));
+  block_listener_(height, block_hash);
+}
+
+void Synchronizer::EmitTransactionListener(const std::string& wallet_id,
+                                           const std::string& tx_id,
+                                           TransactionStatus status) {
+  ConnectionDebugLog(
+      "listener",
+      strprintf("dispatch transaction wallet=%s txid=%s status=%s",
+                wallet_id.c_str(), tx_id.c_str(), TransactionStatusName(status)));
   transaction_listener_(tx_id, status, wallet_id);
+}
+
+void Synchronizer::EmitConnectionListener(ConnectionStatus status,
+                                          int progress) {
+  ConnectionDebugLog(
+      "listener",
+      strprintf("dispatch blockchain connection status=%s progress=%d",
+                ConnectionStatusName(status), progress));
+  connection_listener_(status, progress);
 }
 
 int Synchronizer::GetChainTip() {

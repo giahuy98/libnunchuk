@@ -75,6 +75,15 @@ class Synchronizer {
   virtual void Run(){};
 
  protected:
+  void EmitBalanceListener(const std::string& wallet_id, Amount balance);
+  void EmitBalancesListener(const std::string& wallet_id, Amount balance,
+                            Amount unconfirmed_balance);
+  void EmitBlockListener(int height, const std::string& block_hash);
+  void EmitTransactionListener(const std::string& wallet_id,
+                               const std::string& tx_id,
+                               TransactionStatus status);
+  void EmitConnectionListener(ConnectionStatus status, int progress);
+
   AppSettings app_settings_;
   std::shared_ptr<NunchukStorage> storage_;
 

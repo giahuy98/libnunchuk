@@ -154,7 +154,7 @@ bool ElectrumSynchronizer::UpdateTransactions(Chain chain,
         storage_->InsertTransaction(chain, wallet_id, raw, height, time, fee);
       }
       if (status_ == Status::READY) {
-        transaction_listener_(tx_id, status, wallet_id);
+        this->EmitTransactionListener(wallet_id, tx_id, status);
       }
     }
 
@@ -172,7 +172,7 @@ bool ElectrumSynchronizer::UpdateTransactions(Chain chain,
       for (auto&& txid : pending_receive_ids) {
         if (!more_txs.count(txid)) {
           storage_->DeleteTransaction(chain, wallet_id, txid);
-          transaction_listener_(txid, TS::REPLACED, wallet_id);
+          this->EmitTransactionListener(wallet_id, txid, TS::REPLACED);
         }
       }
     }
@@ -205,7 +205,7 @@ bool ElectrumSynchronizer::UpdateTransactions(Chain chain,
       storage_->InsertTransaction(chain, wallet_id, raw, height, time, fee);
     }
     if (status_ == Status::READY) {
-      transaction_listener_(tx_id, status, wallet_id);
+      this->EmitTransactionListener(wallet_id, tx_id, status);
     }
   }
   auto pending_receive_txs = storage_->GetTransactions(
@@ -218,7 +218,7 @@ bool ElectrumSynchronizer::UpdateTransactions(Chain chain,
       } catch (NunchukException& e) {
         if (e.code() == NunchukException::SERVER_REQUEST_ERROR) continue;
         storage_->DeleteTransaction(chain, wallet_id, tx_id);
-        transaction_listener_(tx_id, TS::REPLACED, wallet_id);
+        this->EmitTransactionListener(wallet_id, tx_id, TS::REPLACED);
       } catch (...) {
       }
     }
@@ -278,7 +278,7 @@ bool ElectrumSynchronizer::UpdateTransactions(
         storage_->InsertTransaction(chain, wallet_id, raw, height, time, fee);
       }
       if (status_ == Status::READY) {
-        transaction_listener_(tx_id, status, wallet_id);
+        this->EmitTransactionListener(wallet_id, tx_id, status);
       }
     }
     if (pending_receive_txs.size() > 0) {
@@ -293,7 +293,7 @@ bool ElectrumSynchronizer::UpdateTransactions(
       for (auto&& txid : pending_receive_ids) {
         if (!more_txs.count(txid)) {
           storage_->DeleteTransaction(chain, wallet_id, txid);
-          transaction_listener_(txid, TS::REPLACED, wallet_id);
+          this->EmitTransactionListener(wallet_id, txid, TS::REPLACED);
         }
       }
     }
@@ -333,11 +333,7 @@ std::map<std::string, std::string> ElectrumSynchronizer::SubscribeAddresses(
 void ElectrumSynchronizer::BlockchainSync(Chain chain) {
   const auto notify_connection_listener = [&](ConnectionStatus status,
                                               int progress) {
-    ConnectionDebugLog(
-        "listener",
-        strprintf("blockchain connection status=%s progress=%d",
-                  ConnectionStatusName(status), progress));
-    connection_listener_(status, progress);
+    this->EmitConnectionListener(status, progress);
   };
 
   notify_connection_listener(ConnectionStatus::OFFLINE, 0);
@@ -351,12 +347,12 @@ void ElectrumSynchronizer::BlockchainSync(Chain chain) {
                          strprintf("header notification height=%d",
                                    chain_tip_));
       storage_->SetChainTip(app_settings_.get_chain(), chain_tip_);
-      block_listener_(rs[0]["height"], rs[0]["hex"]);
+      this->EmitBlockListener(rs[0]["height"], rs[0]["hex"]);
     });
     chain_tip_ = header["height"];
     notify_connection_listener(ConnectionStatus::SYNCING, 0);
     storage_->SetChainTip(chain, header["height"]);
-    block_listener_(header["height"], header["hex"]);
+    this->EmitBlockListener(header["height"], header["hex"]);
     ConnectionDebugLog("listener", "registering electrum scripthash listener");
     client_->scripthash_add_listener([&](json notification) {
       OnScripthashStatusChange(app_settings_.get_chain(), notification);
@@ -404,10 +400,10 @@ void ElectrumSynchronizer::BlockchainSync(Chain chain) {
     } catch (...) {
     }
     Amount balance = storage_->GetBalance(chain, wallet_id);
-    balance_listener_(wallet_id, balance);
+    this->EmitBalanceListener(wallet_id, balance);
     Amount unconfirmed_balance =
         storage_->GetUnconfirmedBalance(chain, wallet_id);
-    balances_listener_(wallet_id, balance, unconfirmed_balance);
+    this->EmitBalancesListener(wallet_id, balance, unconfirmed_balance);
     notify_connection_listener(ConnectionStatus::SYNCING,
                                ++process * 100 / wallet_ids.size());
   }
@@ -513,10 +509,10 @@ int ElectrumSynchronizer::BatchLookAhead(
 
   UpdateScripthashesStatus(chain, wallet_id, scripthashes, status);
   Amount balance = storage_->GetBalance(chain, wallet_id);
-  balance_listener_(wallet_id, balance);
+  this->EmitBalanceListener(wallet_id, balance);
   Amount unconfirmed_balance =
       storage_->GetUnconfirmedBalance(chain, wallet_id);
-  balances_listener_(wallet_id, balance, unconfirmed_balance);
+  this->EmitBalancesListener(wallet_id, balance, unconfirmed_balance);
   return lastUsedIdx;
 }
 
@@ -544,10 +540,10 @@ void ElectrumSynchronizer::UpdateScripthashStatus(Chain chain,
   }
   if (check_balance) {
     Amount balance = storage_->GetBalance(chain, wallet_id);
-    balance_listener_(wallet_id, balance);
+    this->EmitBalanceListener(wallet_id, balance);
     Amount unconfirmed_balance =
         storage_->GetUnconfirmedBalance(chain, wallet_id);
-    balances_listener_(wallet_id, balance, unconfirmed_balance);
+    this->EmitBalancesListener(wallet_id, balance, unconfirmed_balance);
   }
 }
 

@@ -37,7 +37,7 @@ CoreRpcSynchronizer::~CoreRpcSynchronizer() {
 }
 
 void CoreRpcSynchronizer::Run() {
-  connection_listener_(ConnectionStatus::OFFLINE, 0);
+  this->EmitConnectionListener(ConnectionStatus::OFFLINE, 0);
   client_ = std::unique_ptr<CoreRpcClient>(new CoreRpcClient(app_settings_));
   timer_.async_wait(boost::bind(&CoreRpcSynchronizer::BlockchainSync, this,
                                 placeholders::error));
@@ -105,7 +105,7 @@ int CoreRpcSynchronizer::BatchLookAhead(
 
 void CoreRpcSynchronizer::RescanBlockchain(int start_height, int stop_height) {
   if (stopped) return;
-  connection_listener_(ConnectionStatus::SYNCING, 0);
+  this->EmitConnectionListener(ConnectionStatus::SYNCING, 0);
   client_->RescanBlockchain(start_height, stop_height);
 }
 
@@ -117,13 +117,13 @@ bool CoreRpcSynchronizer::IsRpcReady() {
       return true;
     } else {
       int progress = info["scanning"]["progress"].get<double>() * 100;
-      connection_listener_(ConnectionStatus::SYNCING, progress);
+      this->EmitConnectionListener(ConnectionStatus::SYNCING, progress);
       return false;
     }
   } catch (RPCException& re) {
     if (re.code() != RPCException::RPC_WALLET_NOT_FOUND) {
       if (re.code() == RPCException::RPC_REQUEST_ERROR) {
-        connection_listener_(ConnectionStatus::OFFLINE, 0);
+        this->EmitConnectionListener(ConnectionStatus::OFFLINE, 0);
       }
       throw;
     }
@@ -155,7 +155,7 @@ void CoreRpcSynchronizer::BlockchainSync(
   if (chain_tip_ != blockchain_info["blocks"].get<int>()) {
     chain_tip_ = blockchain_info["blocks"].get<int>();
     storage_->SetChainTip(chain, chain_tip_);
-    block_listener_(chain_tip_, blockchain_info["bestblockhash"]);
+    this->EmitBlockListener(chain_tip_, blockchain_info["bestblockhash"]);
   }
 
   auto wallet_ids = storage_->ListRecentlyUsedWallets(chain);
@@ -221,8 +221,8 @@ void CoreRpcSynchronizer::BlockchainSync(
               auto tx = client_->GetTransaction(tx_id);
               storage_->UpdateTransaction(chain, wallet_id, tx["hex"], height,
                                           tx["blocktime"]);
-              transaction_listener_(tx_id, TransactionStatus::CONFIRMED,
-                                    wallet_id);
+              this->EmitTransactionListener(wallet_id, tx_id,
+                                            TransactionStatus::CONFIRMED);
             }
             found = true;
             break;
@@ -236,24 +236,24 @@ void CoreRpcSynchronizer::BlockchainSync(
                                       time);
           auto status = height <= 0 ? TransactionStatus::PENDING_CONFIRMATION
                                     : TransactionStatus::CONFIRMED;
-          transaction_listener_(tx_id, status, wallet_id);
+          this->EmitTransactionListener(wallet_id, tx_id, status);
         }
       }
     }
 
     Amount balance = storage_->GetBalance(chain, wallet_id);
-    balance_listener_(wallet_id, balance);
+    this->EmitBalanceListener(wallet_id, balance);
     Amount unconfirmed_balance =
         storage_->GetUnconfirmedBalance(chain, wallet_id);
-    balances_listener_(wallet_id, balance, unconfirmed_balance);
+    this->EmitBalancesListener(wallet_id, balance, unconfirmed_balance);
   }
 
   if (stopped) return;
   if (!descriptors.empty()) {
-    connection_listener_(ConnectionStatus::SYNCING, 0);
+    this->EmitConnectionListener(ConnectionStatus::SYNCING, 0);
     client_->ImportDescriptors(descriptors.dump());
   } else {
-    connection_listener_(ConnectionStatus::ONLINE, 100);
+    this->EmitConnectionListener(ConnectionStatus::ONLINE, 100);
   }
 }
 
