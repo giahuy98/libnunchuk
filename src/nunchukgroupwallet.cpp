@@ -337,6 +337,10 @@ void NunchukImpl::StartListenEvents() {
       group_wallet_dashboard_listener_(walletId);
     }
     return true;
+  }, [&]() {
+    ConnectionDebugLog("listener",
+                       "group event stream reconnected, reconciling transactions");
+    StartConsumeGroupEvent();
   });
 }
 
@@ -358,6 +362,15 @@ std::string NunchukImpl::GetGroupDeviceUID() {
 
 void NunchukImpl::StartConsumeGroupEvent() {
   ThrowIfNotEnable(group_wallet_enable_);
+  if (sync_group_tx_.valid() &&
+      sync_group_tx_.wait_for(std::chrono::seconds(0)) !=
+          std::future_status::ready) {
+    ConnectionDebugLog("listener",
+                       "group transaction reconciliation already running");
+    return;
+  }
+  ConnectionDebugLog("listener",
+                     "starting group transaction reconciliation");
   sync_group_tx_ = std::async(std::launch::async, [&] {
     auto wallet_ids = storage_->GetGroupWalletIds(chain_);
     for (auto&& wallet_id : wallet_ids) {
@@ -368,6 +381,8 @@ void NunchukImpl::StartConsumeGroupEvent() {
         }
       }
     }
+    ConnectionDebugLog("listener",
+                       "finished group transaction reconciliation");
   });
 }
 

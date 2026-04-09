@@ -1549,7 +1549,8 @@ std::vector<GroupMessage> GroupService::GetMessages(const std::string& walletId,
 }
 
 void GroupService::StartListenEvents(
-    std::function<bool(const nlohmann::json&)> callback) {
+    std::function<bool(const nlohmann::json&)> callback,
+    std::function<void()> on_reconnect) {
   auto handle_event = [callback =
                            std::move(callback)](std::string_view event_data) {
     size_t data_pos = event_data.find("data:");
@@ -1580,7 +1581,8 @@ void GroupService::StartListenEvents(
   ConnectionDebugLog("group-sse",
                      strprintf("starting listener base_url=%s",
                                baseUrl_.c_str()));
-  sse_thread_ = std::thread([&, handle_event = std::move(handle_event)] {
+  sse_thread_ = std::thread([&, handle_event = std::move(handle_event),
+                             on_reconnect = std::move(on_reconnect)] {
     std::string auth = (std::string("Bearer ") + accessToken_);
     httplib::Headers headers = {{"Device-Token", deviceToken_},
                                 {"Authorization", auth},
@@ -1590,6 +1592,7 @@ void GroupService::StartListenEvents(
     sse_client_->set_read_timeout(std::chrono::hours(24));
     sse_client_->set_keep_alive(true);
     stop_ = false;
+    bool has_connected = false;
     while (!stop_) {
       std::string buffer;
       bool first_chunk_received = false;
@@ -1611,6 +1614,12 @@ void GroupService::StartListenEvents(
                   "group-sse",
                   strprintf("received first stream chunk bytes=%zu",
                             data_length));
+              if (has_connected && on_reconnect) {
+                ConnectionDebugLog("group-sse",
+                                   "stream reconnected, running recovery");
+                on_reconnect();
+              }
+              has_connected = true;
             }
             buffer.append(data, data_length);
             size_t pos;
