@@ -37,6 +37,10 @@ static long long SUBCRIBE_DELAY_MS = 50;
 static int MAX_BATCH_SIZE_GETRAWTX = 100;
 
 ElectrumSynchronizer::~ElectrumSynchronizer() {
+  ConnectionDebugLog("sync",
+                     strprintf("sync=%llu electrum synchronizer destructor begin ptr=%p",
+                               static_cast<unsigned long long>(instance_id()),
+                               static_cast<const void*>(this)));
   {
     std::lock_guard<std::mutex> guard(status_mutex_);
     status_ = Status::STOPPED;
@@ -54,50 +58,116 @@ void ElectrumSynchronizer::WaitForReady() {
 }
 
 void ElectrumSynchronizer::Run() {
+  ConnectionDebugLog("sync",
+                     strprintf("sync=%llu Run requested ptr=%p",
+                               static_cast<unsigned long long>(instance_id()),
+                               static_cast<const void*>(this)));
   {
     std::lock_guard<std::mutex> guard(status_mutex_);
-    if (status_ == Status::STOPPED) return;
+    if (status_ == Status::STOPPED) {
+      ConnectionDebugLog("sync",
+                         strprintf("sync=%llu Run ignored because status=STOPPED",
+                                   static_cast<unsigned long long>(
+                                       instance_id())));
+      return;
+    }
     status_ = Status::CONNECTING;
     status_cv_.notify_all();
   }
   // Clear cache
   chain_tip_ = 0;
   scripthash_to_wallet_address_.clear();
+  ConnectionDebugLog(
+      "sync",
+      strprintf("sync=%llu posting electrum connect task",
+                static_cast<unsigned long long>(instance_id())));
 
   io_service_.post([&]() {
+    ConnectionDebugLog(
+        "sync",
+        strprintf("sync=%llu connect task begin", static_cast<unsigned long long>(
+                                                   instance_id())));
     try {
+      if (client_) {
+        ConnectionDebugLog(
+            "sync",
+            strprintf("sync=%llu replacing existing client=%llu",
+                      static_cast<unsigned long long>(instance_id()),
+                      static_cast<unsigned long long>(client_->instance_id())));
+      }
       client_ = std::unique_ptr<ElectrumClient>(
-          new ElectrumClient(app_settings_, [&]() {
+          new ElectrumClient(app_settings_, instance_id(), [&](uint64_t client_id) {
+            ConnectionDebugLog(
+                "sync",
+                strprintf("sync=%llu reconnect requested by client=%llu after %d seconds",
+                          static_cast<unsigned long long>(instance_id()),
+                          static_cast<unsigned long long>(client_id),
+                          RECONNECT_DELAY_SECOND));
             io_service_.post([&]() {
               std::this_thread::sleep_for(
                   std::chrono::seconds(RECONNECT_DELAY_SECOND));
               Run();
             });
           }));
+      ConnectionDebugLog(
+          "sync",
+          strprintf("sync=%llu created electrum client=%llu",
+                    static_cast<unsigned long long>(instance_id()),
+                    static_cast<unsigned long long>(client_->instance_id())));
     } catch (...) {
       std::lock_guard<std::mutex> guard(status_mutex_);
       if (status_ != Status::STOPPED) {
         status_ = Status::UNINITIALIZED;
         status_cv_.notify_all();
       }
+      ConnectionDebugLog(
+          "sync",
+          strprintf("sync=%llu electrum client construction failed",
+                    static_cast<unsigned long long>(instance_id())));
       return;
     }
     {
       std::lock_guard<std::mutex> guard(status_mutex_);
-      if (status_ != Status::CONNECTING) return;
+      if (status_ != Status::CONNECTING) {
+        ConnectionDebugLog(
+            "sync",
+            strprintf("sync=%llu aborting connect task because status changed",
+                      static_cast<unsigned long long>(instance_id())));
+        return;
+      }
       status_ = Status::SYNCING;
       status_cv_.notify_all();
     }
+    ConnectionDebugLog(
+        "sync",
+        strprintf("sync=%llu entering BlockchainSync",
+                  static_cast<unsigned long long>(instance_id())));
     try {
       BlockchainSync(app_settings_.get_chain());
+    } catch (const std::exception& e) {
+      ConnectionDebugLog(
+          "sync",
+          strprintf("sync=%llu BlockchainSync exception=%s",
+                    static_cast<unsigned long long>(instance_id()), e.what()));
     } catch (...) {
-      // TODO(Bakaoh): more elegant exeption handling
-      // storage and CoreUtils chain-switch may cause exeption here
+      ConnectionDebugLog(
+          "sync",
+          strprintf("sync=%llu BlockchainSync unknown exception",
+                    static_cast<unsigned long long>(instance_id())));
     }
     std::lock_guard<std::mutex> guard(status_mutex_);
-    if (status_ != Status::SYNCING) return;
+    if (status_ != Status::SYNCING) {
+      ConnectionDebugLog(
+          "sync",
+          strprintf("sync=%llu skipping READY transition because status changed",
+                    static_cast<unsigned long long>(instance_id())));
+      return;
+    }
     status_ = Status::READY;
     status_cv_.notify_all();
+    ConnectionDebugLog("sync",
+                       strprintf("sync=%llu status=READY",
+                                 static_cast<unsigned long long>(instance_id())));
   });
 }
 

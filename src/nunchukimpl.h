@@ -25,6 +25,7 @@
 #include <coreutils.h>
 #include <storage/storage.h>
 #include <backend/synchronizer.h>
+#include <cstdint>
 #include <map>
 #include <tap_protocol/hwi_tapsigner.h>
 
@@ -781,8 +782,10 @@ class NunchukImpl : public Nunchuk {
                        const std::vector<std::string>& walletIds,
                        bool sync = false);
   void StartListenEvents();
+  uint64_t instance_id() const { return instance_id_; }
 
   AppSettings app_settings_;
+  const uint64_t instance_id_;
   std::string account_;
   Chain chain_;
   HWIService hwi_;

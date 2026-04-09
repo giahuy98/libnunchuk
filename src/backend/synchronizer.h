@@ -21,6 +21,7 @@
 #include <nunchuk.h>
 #include <storage/storage.h>
 #include <atomic>
+#include <cstdint>
 #include <boost/asio.hpp>
 #include <boost/signals2.hpp>
 
@@ -38,6 +39,7 @@ class Synchronizer {
   int GetChainTip();
   std::string NewAddress(Chain chain, const std::string& wallet_id,
                          bool internal);
+  uint64_t instance_id() const { return instance_id_; }
 
   void AddBalanceListener(std::function<void(std::string, Amount)> listener);
   void AddBalancesListener(
@@ -91,6 +93,7 @@ class Synchronizer {
   boost::asio::io_service io_service_;
   boost::asio::executor_work_guard<boost::asio::io_context::executor_type>
       sync_worker_;
+  const uint64_t instance_id_;
 
   // Cache
   std::atomic<int> chain_tip_;

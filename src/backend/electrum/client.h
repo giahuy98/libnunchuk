@@ -25,6 +25,8 @@
 #include <boost/signals2.hpp>
 #include <utils/json.hpp>
 
+#include <atomic>
+#include <cstdint>
 #include <iostream>
 #include <future>
 #include <memory>
@@ -39,8 +41,10 @@ namespace nunchuk {
 class ElectrumClient {
  public:
   ElectrumClient(const nunchuk::AppSettings& appsettings,
-                 const std::function<void()> on_disconnect);
+                 uint64_t synchronizer_id,
+                 const std::function<void(uint64_t)> on_disconnect);
   ~ElectrumClient();
+  uint64_t instance_id() const { return instance_id_; }
 
   void subscribe(const std::string& method, const NotifySignal::slot_type& lis);
   void scripthash_add_listener(const NotifySignal::slot_type& lis);
@@ -95,6 +99,8 @@ class ElectrumClient {
   int proxy_port_ = -1;
   std::string proxy_username_ = "";
   std::string proxy_password_ = "";
+  const uint64_t synchronizer_id_;
+  const uint64_t instance_id_;
   std::thread io_thread_;
   boost::asio::io_service io_service_;
   std::thread signal_thread_;
@@ -113,7 +119,7 @@ class ElectrumClient {
   std::map<std::string, NotifySignal> sigmap_;
   std::map<int, std::promise<json>> callback_;
   std::map<std::string, std::promise<json>> batch_callback_;
-  boost::signals2::signal<void()> disconnect_signal_;
+  boost::signals2::signal<void(uint64_t)> disconnect_signal_;
   boost::posix_time::seconds interval_;
   boost::asio::deadline_timer timer_;
   bool support_batch_request_ = false;

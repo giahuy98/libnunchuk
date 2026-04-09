@@ -63,6 +63,7 @@ namespace nunchuk {
 
 static int MESSAGE_MIN_LEN = 8;
 static int CACHE_SECOND = 600;  // 10 minutes
+static std::atomic<uint64_t> g_nunchuk_impl_instance_counter{0};
 
 std::map<std::string, time_t> NunchukImpl::last_scan_;
 
@@ -91,6 +92,7 @@ NunchukImpl::NunchukImpl(const AppSettings& appsettings,
                          const std::string& passphrase,
                          const std::string& account)
     : app_settings_(appsettings),
+      instance_id_(++g_nunchuk_impl_instance_counter),
       account_(account),
       chain_(app_settings_.get_chain()),
       hwi_(app_settings_.get_hwi_path(), chain_),
@@ -98,6 +100,12 @@ NunchukImpl::NunchukImpl(const AppSettings& appsettings,
       hwi_tapsigner_(MakeHWITapsigner(NunchukChain2TapsignerChain(chain_))),
       group_service_(app_settings_.get_group_server()) {
   SetConnectionLogFilePath(ResolveConnectionLogFilePath(app_settings_));
+  ConnectionDebugLog(
+      "lib",
+      strprintf("created lib=%llu ptr=%p account=%s chain=%d",
+                static_cast<unsigned long long>(instance_id_),
+                static_cast<const void*>(this), account_.c_str(),
+                static_cast<int>(chain_)));
   CoreUtils::getInstance().SetChain(chain_);
   storage_->Init(app_settings_.get_storage_path(), passphrase);
   storage_->MaybeMigrate(chain_);
@@ -106,10 +114,20 @@ NunchukImpl::NunchukImpl(const AppSettings& appsettings,
   std::fill(estimate_fee_cached_value_,
             estimate_fee_cached_value_ + ESTIMATE_FEE_CACHE_SIZE, 0);
   synchronizer_ = MakeSynchronizer(app_settings_, account_);
+  ConnectionDebugLog(
+      "lib",
+      strprintf("lib=%llu created synchronizer=%llu ptr=%p",
+                static_cast<unsigned long long>(instance_id_),
+                static_cast<unsigned long long>(synchronizer_->instance_id()),
+                static_cast<const void*>(synchronizer_.get())));
   synchronizer_->Run();
 }
 Nunchuk::~Nunchuk() = default;
 NunchukImpl::~NunchukImpl() {
+  ConnectionDebugLog("lib",
+                     strprintf("destroying lib=%llu ptr=%p",
+                               static_cast<unsigned long long>(instance_id_),
+                               static_cast<const void*>(this)));
   if (group_wallet_enable_) {
     // Stop all ongoing requests running in other threads
     group_service_.StopHttpClients();
@@ -1585,6 +1603,11 @@ bool NunchukImpl::DeleteTransaction(const std::string& wallet_id,
 AppSettings NunchukImpl::GetAppSettings() { return app_settings_; }
 
 AppSettings NunchukImpl::UpdateAppSettings(const AppSettings& settings) {
+  ConnectionDebugLog(
+      "lib",
+      strprintf("lib=%llu UpdateAppSettings ptr=%p",
+                static_cast<unsigned long long>(instance_id_),
+                static_cast<const void*>(this)));
   app_settings_ = settings;
   SetConnectionLogFilePath(ResolveConnectionLogFilePath(app_settings_));
   chain_ = app_settings_.get_chain();
@@ -1592,12 +1615,31 @@ AppSettings NunchukImpl::UpdateAppSettings(const AppSettings& settings) {
   hwi_.SetChain(chain_);
   hwi_tapsigner_->SetChain(NunchukChain2TapsignerChain(chain_));
   CoreUtils::getInstance().SetChain(chain_);
-  if (synchronizer_->NeedRecreate(settings)) {
+  bool need_recreate = synchronizer_->NeedRecreate(settings);
+  ConnectionDebugLog(
+      "lib",
+      strprintf("lib=%llu UpdateAppSettings need_recreate=%s sync=%llu",
+                static_cast<unsigned long long>(instance_id_),
+                ConnectionLogBool(need_recreate),
+                static_cast<unsigned long long>(synchronizer_->instance_id())));
+  if (need_recreate) {
     std::fill(estimate_fee_cached_time_,
               estimate_fee_cached_time_ + ESTIMATE_FEE_CACHE_SIZE, 0);
     std::fill(estimate_fee_cached_value_,
               estimate_fee_cached_value_ + ESTIMATE_FEE_CACHE_SIZE, 0);
+    ConnectionDebugLog(
+        "lib",
+        strprintf("lib=%llu recreating synchronizer old_sync=%llu ptr=%p",
+                  static_cast<unsigned long long>(instance_id_),
+                  static_cast<unsigned long long>(synchronizer_->instance_id()),
+                  static_cast<const void*>(synchronizer_.get())));
     synchronizer_ = MakeSynchronizer(app_settings_, account_);
+    ConnectionDebugLog(
+        "lib",
+        strprintf("lib=%llu created synchronizer=%llu ptr=%p",
+                  static_cast<unsigned long long>(instance_id_),
+                  static_cast<unsigned long long>(synchronizer_->instance_id()),
+                  static_cast<const void*>(synchronizer_.get())));
     synchronizer_->Run();
   }
   return settings;

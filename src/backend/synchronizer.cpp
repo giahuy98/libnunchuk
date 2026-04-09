@@ -27,6 +27,8 @@ namespace nunchuk {
 
 namespace {
 
+std::atomic<uint64_t> g_synchronizer_instance_counter{0};
+
 const char* TransactionStatusName(TransactionStatus status) {
   switch (status) {
     case TransactionStatus::PENDING_SIGNATURES:
@@ -49,6 +51,16 @@ const char* TransactionStatusName(TransactionStatus status) {
   return "UNKNOWN";
 }
 
+const char* BackendTypeName(BackendType backend_type) {
+  switch (backend_type) {
+    case BackendType::ELECTRUM:
+      return "ELECTRUM";
+    case BackendType::CORERPC:
+      return "CORERPC";
+  }
+  return "UNKNOWN";
+}
+
 }  // namespace
 
 std::unique_ptr<Synchronizer> MakeSynchronizer(const AppSettings& appsettings,
@@ -67,7 +79,15 @@ Synchronizer::Synchronizer(const AppSettings& appsettings,
     : app_settings_(appsettings),
       storage_(NunchukStorage::get(account)),
       sync_thread_(),
-      sync_worker_(make_work_guard(io_service_)) {
+      sync_worker_(make_work_guard(io_service_)),
+      instance_id_(++g_synchronizer_instance_counter) {
+  ConnectionDebugLog(
+      "sync",
+      strprintf("created sync=%llu ptr=%p backend=%s chain=%d account=%s",
+                static_cast<unsigned long long>(instance_id_),
+                static_cast<const void*>(this),
+                BackendTypeName(app_settings_.get_backend_type()),
+                static_cast<int>(app_settings_.get_chain()), account.c_str()));
   sync_thread_ = std::thread([&]() {
     for (;;) {
       try {
@@ -79,7 +99,12 @@ Synchronizer::Synchronizer(const AppSettings& appsettings,
   });
 }
 
-Synchronizer::~Synchronizer() {}
+Synchronizer::~Synchronizer() {
+  ConnectionDebugLog("sync",
+                     strprintf("destroyed sync=%llu ptr=%p",
+                               static_cast<unsigned long long>(instance_id_),
+                               static_cast<const void*>(this)));
+}
 
 bool Synchronizer::NeedRecreate(const AppSettings& new_settings) {
   if (app_settings_.get_backend_type() != new_settings.get_backend_type() ||
@@ -153,7 +178,8 @@ void Synchronizer::NotifyTransactionUpdate(const std::string& wallet_id,
 void Synchronizer::EmitBalanceListener(const std::string& wallet_id,
                                        Amount balance) {
   ConnectionDebugLog("listener",
-                     strprintf("dispatch balance wallet=%s balance=%lld",
+                     strprintf("sync=%llu dispatch balance wallet=%s balance=%lld",
+                               static_cast<unsigned long long>(instance_id_),
                                wallet_id.c_str(),
                                static_cast<long long>(balance)));
   balance_listener_(wallet_id, balance);
@@ -165,7 +191,8 @@ void Synchronizer::EmitBalancesListener(const std::string& wallet_id,
   ConnectionDebugLog(
       "listener",
       strprintf(
-          "dispatch balances wallet=%s balance=%lld unconfirmed_balance=%lld",
+          "sync=%llu dispatch balances wallet=%s balance=%lld unconfirmed_balance=%lld",
+          static_cast<unsigned long long>(instance_id_),
           wallet_id.c_str(), static_cast<long long>(balance),
           static_cast<long long>(unconfirmed_balance)));
   balances_listener_(wallet_id, balance, unconfirmed_balance);
@@ -174,7 +201,9 @@ void Synchronizer::EmitBalancesListener(const std::string& wallet_id,
 void Synchronizer::EmitBlockListener(int height, const std::string& block_hash) {
   ConnectionDebugLog(
       "listener",
-      strprintf("dispatch block height=%d hash=%s", height, block_hash.c_str()));
+      strprintf("sync=%llu dispatch block height=%d hash=%s",
+                static_cast<unsigned long long>(instance_id_), height,
+                block_hash.c_str()));
   block_listener_(height, block_hash);
 }
 
@@ -183,7 +212,8 @@ void Synchronizer::EmitTransactionListener(const std::string& wallet_id,
                                            TransactionStatus status) {
   ConnectionDebugLog(
       "listener",
-      strprintf("dispatch transaction wallet=%s txid=%s status=%s",
+      strprintf("sync=%llu dispatch transaction wallet=%s txid=%s status=%s",
+                static_cast<unsigned long long>(instance_id_),
                 wallet_id.c_str(), tx_id.c_str(), TransactionStatusName(status)));
   transaction_listener_(tx_id, status, wallet_id);
 }
@@ -192,7 +222,8 @@ void Synchronizer::EmitConnectionListener(ConnectionStatus status,
                                           int progress) {
   ConnectionDebugLog(
       "listener",
-      strprintf("dispatch blockchain connection status=%s progress=%d",
+      strprintf("sync=%llu dispatch blockchain connection status=%s progress=%d",
+                static_cast<unsigned long long>(instance_id_),
                 ConnectionStatusName(status), progress));
   connection_listener_(status, progress);
 }
