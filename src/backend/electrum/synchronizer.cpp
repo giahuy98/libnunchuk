@@ -160,8 +160,10 @@ void ElectrumSynchronizer::Run() {
         "sync",
         strprintf("sync=%llu entering BlockchainSync",
                   static_cast<unsigned long long>(instance_id())));
+    bool sync_completed = false;
     try {
       BlockchainSync(app_settings_.get_chain());
+      sync_completed = true;
     } catch (const std::exception& e) {
       ConnectionDebugLog(
           "sync",
@@ -172,6 +174,30 @@ void ElectrumSynchronizer::Run() {
           "sync",
           strprintf("sync=%llu BlockchainSync unknown exception",
                     static_cast<unsigned long long>(instance_id())));
+    }
+    if (!sync_completed) {
+      bool notify_offline = false;
+      {
+        std::lock_guard<std::mutex> guard(status_mutex_);
+        if (status_ == Status::SYNCING) {
+          status_ = Status::UNINITIALIZED;
+          status_cv_.notify_all();
+          notify_offline = true;
+        }
+      }
+      if (notify_offline) {
+        EmitConnectionListener(ConnectionStatus::OFFLINE, 0);
+        ConnectionDebugLog(
+            "sync",
+            strprintf("sync=%llu status=UNINITIALIZED after BlockchainSync failure",
+                      static_cast<unsigned long long>(instance_id())));
+      } else {
+        ConnectionDebugLog(
+            "sync",
+            strprintf("sync=%llu skipping failure transition because status changed",
+                      static_cast<unsigned long long>(instance_id())));
+      }
+      return;
     }
     std::lock_guard<std::mutex> guard(status_mutex_);
     if (status_ != Status::SYNCING) {

@@ -202,15 +202,66 @@ void ElectrumClient::handle_error(const std::string& where,
   for (auto &&it = callback_.begin(), next = it; it != callback_.end();
        it = next) {
     ++next;
-    it->second.set_value(
-        {{"error", {{"code", 1}, {"message", "Disconnected"}}}});
+    try {
+      it->second.set_value(
+          {{"error", {{"code", 1}, {"message", "Disconnected"}}}});
+    } catch (const std::exception& e) {
+      ConnectionDebugLog(
+          "electrum",
+          strprintf("%s failed to resolve callback during disconnect: %s",
+                    ElectrumLogPrefix(synchronizer_id_, instance_id_,
+                                      static_cast<const void*>(this))
+                        .c_str(),
+                    e.what()));
+    } catch (...) {
+      ConnectionDebugLog(
+          "electrum",
+          strprintf("%s failed to resolve callback during disconnect",
+                    ElectrumLogPrefix(synchronizer_id_, instance_id_,
+                                      static_cast<const void*>(this))
+                        .c_str()));
+    }
   }
   for (auto &&it = batch_callback_.begin(), next = it;
        it != batch_callback_.end(); it = next) {
     ++next;
-    it->second.set_value(json::array());
+    try {
+      it->second.set_value(json::array());
+    } catch (const std::exception& e) {
+      ConnectionDebugLog(
+          "electrum",
+          strprintf("%s failed to resolve batch callback during disconnect: %s",
+                    ElectrumLogPrefix(synchronizer_id_, instance_id_,
+                                      static_cast<const void*>(this))
+                        .c_str(),
+                    e.what()));
+    } catch (...) {
+      ConnectionDebugLog(
+          "electrum",
+          strprintf("%s failed to resolve batch callback during disconnect",
+                    ElectrumLogPrefix(synchronizer_id_, instance_id_,
+                                      static_cast<const void*>(this))
+                        .c_str()));
+    }
   }
-  disconnect_signal_(instance_id_);
+  try {
+    disconnect_signal_(instance_id_);
+  } catch (const std::exception& e) {
+    ConnectionDebugLog(
+        "electrum",
+        strprintf("%s disconnect signal failed: %s",
+                  ElectrumLogPrefix(synchronizer_id_, instance_id_,
+                                    static_cast<const void*>(this))
+                      .c_str(),
+                  e.what()));
+  } catch (...) {
+    ConnectionDebugLog(
+        "electrum",
+        strprintf("%s disconnect signal failed",
+                  ElectrumLogPrefix(synchronizer_id_, instance_id_,
+                                    static_cast<const void*>(this))
+                      .c_str()));
+  }
 }
 
 void ElectrumClient::subscribe(const std::string& method,
