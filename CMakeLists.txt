@@ -217,6 +217,8 @@ add_library("${PROJECT_NAME}" STATIC
     src/utils/enumconverter.hpp
     src/utils/rfc2440.hpp
     src/utils/coldcard.cpp
+    src/utils/satochip.hpp
+    src/utils/satochip.cpp
     src/utils/bip85.cpp
     src/utils/secretbox.cpp
     src/utils/tweetnacl.c

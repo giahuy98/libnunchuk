@@ -720,9 +720,9 @@ class NunchukImpl : public Nunchuk {
   GroupDummyTransaction SignGroupDummyTransaction(
       const std::string& walletId, const std::string& dummyTransactionId,
       const std::vector<std::string>& signatures) override;
-  void CancelGroupDummyTransaction(const std::string& walletId,
-                                   const std::string& dummyTransactionId)
-      override;
+  void CancelGroupDummyTransaction(
+      const std::string& walletId,
+      const std::string& dummyTransactionId) override;
   GroupTransactionState GetGroupTransactionState(
       const std::string& walletId, const std::string& txId) override;
   int GetGroupWalletAlertCount(const std::string& walletId) override;
@@ -761,6 +761,16 @@ class NunchukImpl : public Nunchuk {
           listener) override;
   void AddGroupWalletDashboardListener(
       std::function<void(const std::string& walletId)> listener) override;
+
+  SingleSigner GetSatochipSigner(
+      const CardBip32GetExtendedKeyFn& cardBip32GetExtendedKeyFn,
+      const std::string& path) override;
+  std::string SignSatochipTransaction(const SatochipSignPsbtParams& params,
+                                      const Wallet& wallet,
+                                      const std::string& psbt) override;
+  Transaction SignSatochipTransaction(const SatochipSignPsbtParams& params,
+                                      const std::string& wallet_id,
+                                      const std::string& tx_id) override;
 
  private:
   std::string CreatePsbt(const std::string& wallet_id,

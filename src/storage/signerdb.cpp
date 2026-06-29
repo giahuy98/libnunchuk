@@ -601,12 +601,14 @@ bool NunchukSignerDb::UpdateSignerType(SignerType signer_type) {
         return 5;
       case SignerType::PORTAL_NFC:
         return 6;
-      case SignerType::NFC:
+      case SignerType::SATOCHIP_NFC:
         return 7;
-      case SignerType::HARDWARE:
+      case SignerType::NFC:
         return 8;
-      case SignerType::SOFTWARE:
+      case SignerType::HARDWARE:
         return 9;
+      case SignerType::SOFTWARE:
+        return 10;
     }
     return -1;
   };

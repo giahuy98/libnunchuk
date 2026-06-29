@@ -42,6 +42,7 @@
 #include <utils/bcr2.hpp>
 #include <utils/passport.hpp>
 #include <utils/coldcard.hpp>
+#include <utils/satochip.hpp>
 #include <ur.h>
 #include <ur-encoder.hpp>
 #include <ur-decoder.hpp>
@@ -50,8 +51,10 @@
 #include <util/result.h>
 #include <regex>
 #include <charconv>
+#include <cstring>
 #include <base58.h>
 #include <miniscript/compiler.h>
+#include <secp256k1_musig.h>
 
 using json = nlohmann::json;
 using namespace boost::algorithm;
@@ -62,6 +65,35 @@ namespace nunchuk {
 
 static int MESSAGE_MIN_LEN = 8;
 static int CACHE_SECOND = 600;  // 10 minutes
+
+static uint256 ParseMuSig2SessionId(const std::string& session_id) {
+  auto parsed = uint256::FromHex(session_id);
+  if (!parsed) {
+    throw std::runtime_error("[Satochip] invalid MuSig2 session id.");
+  }
+  return *parsed;
+}
+
+static MuSig2SecNonce RawBytesToMuSig2SecNonce(
+    const std::vector<unsigned char>& raw_nonce) {
+  if (raw_nonce.size() != sizeof(secp256k1_musig_secnonce)) {
+    throw std::runtime_error("[Satochip] invalid MuSig2 secnonce size.");
+  }
+
+  MuSig2SecNonce nonce{};
+  std::memcpy(static_cast<secp256k1_musig_secnonce*>(nonce.Get())->data,
+              raw_nonce.data(), raw_nonce.size());
+  return nonce;
+}
+
+static std::vector<unsigned char> RawBytesFromMuSig2SecNonce(
+    MuSig2SecNonce& nonce) {
+  auto* data = static_cast<secp256k1_musig_secnonce*>(nonce.Get())->data;
+  std::vector<unsigned char> raw_nonce{
+      data, data + sizeof(secp256k1_musig_secnonce)};
+  nonce.Invalidate();
+  return raw_nonce;
+}
 
 std::map<std::string, time_t> NunchukImpl::last_scan_;
 
@@ -1363,6 +1395,7 @@ Transaction NunchukImpl::SignTransaction(const std::string& wallet_id,
                                        "mastersigner_id = '%s'",
                                        mastersigner_id));
     case SignerType::PORTAL_NFC:
+    case SignerType::SATOCHIP_NFC:
       throw NunchukException(
           NunchukException::INVALID_SIGNER_TYPE,
           strprintf("Transaction must be sign with NFC "
@@ -1435,6 +1468,7 @@ Transaction NunchukImpl::SignTransaction(const Wallet& wallet,
                                        "mastersigner_id = '%s'",
                                        mastersigner_id));
     case SignerType::PORTAL_NFC:
+    case SignerType::SATOCHIP_NFC:
       throw NunchukException(NunchukException::INVALID_SIGNER_TYPE,
                              strprintf("Transaction must be sign with NFC "
                                        "mastersigner_id = '%s'",
@@ -1470,6 +1504,7 @@ std::string NunchukImpl::SignMessage(const SingleSigner& signer,
     case SignerType::NFC:
     case SignerType::COLDCARD_NFC:
     case SignerType::PORTAL_NFC:
+    case SignerType::SATOCHIP_NFC:
     case SignerType::SERVER:
     case SignerType::PLATFORM:
       break;
@@ -1837,6 +1872,7 @@ void NunchukImpl::CacheMasterSignerXPub(const std::string& mastersigner_id,
     case SignerType::AIRGAP:
     case SignerType::COLDCARD_NFC:
     case SignerType::PORTAL_NFC:
+    case SignerType::SATOCHIP_NFC:
     case SignerType::UNKNOWN:
     case SignerType::SERVER:
     case SignerType::PLATFORM:
@@ -3266,6 +3302,66 @@ std::vector<SingleSigner> NunchukImpl::GetTransactionSigners(
   if (!tx.get_psbt().empty()) return tx.get_signed();
   auto utxos = GetCoinsFromTxInputs(wallet_id, tx.get_inputs());
   return GetRawTxSigners(tx.get_raw(), utxos, wallet);
+}
+
+SingleSigner NunchukImpl::GetSatochipSigner(
+    const CardBip32GetExtendedKeyFn& cardBip32GetExtendedKeyFn,
+    const std::string& path) {
+  auto desc = SatochipGetDescriptor(cardBip32GetExtendedKeyFn, path,
+                                    chain_ != Chain::MAIN);
+  auto signer = Utils::ParseSignerString(desc);
+  signer.set_type(SignerType::SATOCHIP_NFC);
+
+  return signer;
+}
+
+std::string NunchukImpl::SignSatochipTransaction(
+    const SatochipSignPsbtParams& params, const Wallet& wallet,
+    const std::string& psbt) {
+  std::string master_fingerprint =
+      SatochipGetMasterFingerprint(params.cardBip32GetExtendedKeyFn);
+  if (std::none_of(wallet.get_signers().begin(), wallet.get_signers().end(),
+                   [&](const SingleSigner& signer) {
+                     return master_fingerprint ==
+                            signer.get_master_fingerprint();
+                   })) {
+    throw NunchukException(NunchukException::INVALID_PARAMETER,
+                           "Key is not part of wallet.");
+  }
+  auto local_db = storage_->GetLocalDb(chain_);
+  auto save_sec_nonce = [&](const std::string& session_id,
+                            const std::vector<unsigned char>& secnonce) {
+    local_db.SetMuSig2SecNonce(ParseMuSig2SessionId(session_id),
+                               RawBytesToMuSig2SecNonce(secnonce));
+  };
+  auto consume_sec_nonce =
+      [&](const std::string& session_id)
+          -> std::optional<std::vector<unsigned char>> {
+    try {
+      auto secnonce = local_db.GetMuSig2SecNonce(
+          ParseMuSig2SessionId(session_id));
+      return RawBytesFromMuSig2SecNonce(secnonce);
+    } catch (StorageException& se) {
+      if (se.code() == StorageException::NONCE_NOT_FOUND) {
+        return std::nullopt;
+      }
+      throw;
+    }
+  };
+  return SatochipSignPsbt(params, master_fingerprint, psbt, save_sec_nonce,
+                          consume_sec_nonce);
+}
+
+Transaction NunchukImpl::SignSatochipTransaction(
+    const SatochipSignPsbtParams& params, const std::string& wallet_id,
+    const std::string& tx_id) {
+  std::string psbt = storage_->GetPsbt(chain_, wallet_id, tx_id);
+  if (psbt.empty()) {
+    throw StorageException(StorageException::TX_NOT_FOUND, "Tx not found!");
+  }
+  auto wallet = GetWallet(wallet_id);
+  std::string signed_psbt = SignSatochipTransaction(params, wallet, psbt);
+  return ImportPsbt(wallet_id, signed_psbt);
 }
 
 std::unique_ptr<Nunchuk> MakeNunchuk(const AppSettings& appsettings,

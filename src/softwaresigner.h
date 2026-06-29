@@ -32,6 +32,8 @@ class SoftwareSigner {
   static std::string GenerateMnemonic(int words);
   static bool CheckMnemonic(const std::string& mnemonic);
   static std::vector<std::string> GetBIP39WordList();
+  static std::vector<unsigned char> GetBip39Seed(const std::string& mnemonic,
+                                                 const std::string& passphrase);
 
   SoftwareSigner(const std::string& mnemonic, const std::string& passphrase);
   SoftwareSigner(const std::string& master_xprv);
@@ -43,8 +45,8 @@ class SoftwareSigner {
   std::string SignTx(const std::string& base64_psbt) const;
   std::string SignTaprootTx(const NunchukLocalDb& db,
                             const std::string& base64_psbt,
-                            const Wallet& wallet,
-                            int external_index, int internal_index);
+                            const Wallet& wallet, int external_index,
+                            int internal_index);
   std::string SignMessage(const std::string& message,
                           const std::string& derivation_path) const;
 

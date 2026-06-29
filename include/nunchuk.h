@@ -21,6 +21,7 @@
 #include <optional>
 #include <set>
 #include "utils/errorutils.hpp"
+#include "utils/satochip.hpp"
 #define NUNCHUK_EXPORT
 
 #include <functional>
@@ -182,6 +183,7 @@ enum class SignerType {
   SERVER,
   PORTAL_NFC,
   PLATFORM,
+  SATOCHIP_NFC,
 };
 
 enum class OrderBy {
@@ -2165,11 +2167,9 @@ class NUNCHUK_EXPORT Nunchuk {
   virtual GroupSandbox EnableGroupPlatformKey(
       const std::string& groupId,
       const std::vector<std::string>& names = {}) = 0;
-  virtual GroupSandbox DisableGroupPlatformKey(
-      const std::string& groupId) = 0;
+  virtual GroupSandbox DisableGroupPlatformKey(const std::string& groupId) = 0;
   virtual GroupSandbox SetGroupPlatformKeyPolicies(
-      const std::string& groupId,
-      const GroupPlatformKeyPolicies& policies) = 0;
+      const std::string& groupId, const GroupPlatformKeyPolicies& policies) = 0;
   virtual GroupSandbox UpdateGroup(const std::string& groupId,
                                    const std::string& name, int m, int n,
                                    AddressType addressType) = 0;
@@ -2197,15 +2197,12 @@ class NUNCHUK_EXPORT Nunchuk {
   virtual std::vector<GroupDummyTransaction> GetGroupDummyTransactions(
       const std::string& walletId) = 0;
   virtual GroupDummyTransaction GetGroupDummyTransaction(
-      const std::string& walletId,
-      const std::string& dummyTransactionId) = 0;
+      const std::string& walletId, const std::string& dummyTransactionId) = 0;
   virtual GroupDummyTransaction SignGroupDummyTransaction(
-      const std::string& walletId,
-      const std::string& dummyTransactionId,
+      const std::string& walletId, const std::string& dummyTransactionId,
       const std::vector<std::string>& signatures) = 0;
   virtual void CancelGroupDummyTransaction(
-      const std::string& walletId,
-      const std::string& dummyTransactionId) = 0;
+      const std::string& walletId, const std::string& dummyTransactionId) = 0;
   virtual GroupTransactionState GetGroupTransactionState(
       const std::string& walletId, const std::string& txId) = 0;
   virtual int GetGroupWalletAlertCount(const std::string& walletId) = 0;
@@ -2242,6 +2239,17 @@ class NUNCHUK_EXPORT Nunchuk {
           listener) = 0;
   virtual void AddGroupWalletDashboardListener(
       std::function<void(const std::string& walletId)> listener) = 0;
+
+  // Satochip
+  virtual SingleSigner GetSatochipSigner(
+      const CardBip32GetExtendedKeyFn& cardBip32GetExtendedKeyFn,
+      const std::string& path) = 0;
+  virtual std::string SignSatochipTransaction(
+      const SatochipSignPsbtParams& params, const Wallet& wallet,
+      const std::string& psbt) = 0;
+  virtual Transaction SignSatochipTransaction(
+      const SatochipSignPsbtParams& params, const std::string& wallet_id,
+      const std::string& tx_id) = 0;
 
  protected:
   Nunchuk() = default;
@@ -2323,6 +2331,8 @@ class NUNCHUK_EXPORT Utils {
                                           const std::string& cvc);
   static std::string GetMasterFingerprintFromMasterXprv(
       const std::string& master_xprv);
+  static std::vector<unsigned char> GetBip39SeedFromMnemonic(
+      const std::string& mnemonic, const std::string& passphrase);
 
   static std::string SignLoginMessage(const std::string& mnemonic,
                                       const std::string& passphrase,

@@ -305,6 +305,11 @@ std::string Utils::GetMasterFingerprintFromMasterXprv(
   return signer.GetMasterFingerprint();
 }
 
+std::vector<unsigned char> Utils::GetBip39SeedFromMnemonic(
+    const std::string& mnemonic, const std::string& passphrase) {
+  return SoftwareSigner::GetBip39Seed(mnemonic, passphrase);
+}
+
 std::string Utils::SignLoginMessage(const std::string& mnemonic,
                                     const std::string& passphrase,
                                     const std::string& message) {

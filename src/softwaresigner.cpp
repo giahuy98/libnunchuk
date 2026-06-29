@@ -82,6 +82,17 @@ std::vector<std::string> SoftwareSigner::GetBIP39WordList() {
   return list;
 }
 
+std::vector<unsigned char> SoftwareSigner::GetBip39Seed(
+    const std::string& mnemonic, const std::string& passphrase) {
+  std::vector<unsigned char> seed(512 / 8);
+  {
+    std::scoped_lock<std::mutex> lock(*mu_);
+    mnemonic_to_seed(mnemonic.c_str(), passphrase.c_str(), seed.data(),
+                     nullptr);
+  }
+  return seed;
+}
+
 SoftwareSigner::SoftwareSigner(const std::string& mnemonic,
                                const std::string& passphrase)
     : bip32rootkey_(GetBip32RootKey(mnemonic, passphrase)) {}
