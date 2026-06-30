@@ -33,6 +33,10 @@ class NunchukLocalDb : public NunchukDb {
   using NunchukDb::NunchukDb;
   void Init();
   void SetMuSig2SecNonce(const uint256& session_id, MuSig2SecNonce&& nonce) const;
+  void SetMuSig2SecNonceBytes(const uint256& session_id,
+                              const std::vector<unsigned char>& nonce) const;
+  std::vector<unsigned char> GetMuSig2SecNonceBytes(
+      const uint256& session_id) const;
   MuSig2SecNonce GetMuSig2SecNonce(const uint256& session_id) const;
 
   void SetPreferScriptPath(const std::string& tx_id, bool value) const;

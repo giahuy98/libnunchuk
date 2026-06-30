@@ -51,10 +51,8 @@
 #include <util/result.h>
 #include <regex>
 #include <charconv>
-#include <cstring>
 #include <base58.h>
 #include <miniscript/compiler.h>
-#include <secp256k1_musig.h>
 
 using json = nlohmann::json;
 using namespace boost::algorithm;
@@ -72,27 +70,6 @@ static uint256 ParseMuSig2SessionId(const std::string& session_id) {
     throw std::runtime_error("[Satochip] invalid MuSig2 session id.");
   }
   return *parsed;
-}
-
-static MuSig2SecNonce RawBytesToMuSig2SecNonce(
-    const std::vector<unsigned char>& raw_nonce) {
-  if (raw_nonce.size() != sizeof(secp256k1_musig_secnonce)) {
-    throw std::runtime_error("[Satochip] invalid MuSig2 secnonce size.");
-  }
-
-  MuSig2SecNonce nonce{};
-  std::memcpy(static_cast<secp256k1_musig_secnonce*>(nonce.Get())->data,
-              raw_nonce.data(), raw_nonce.size());
-  return nonce;
-}
-
-static std::vector<unsigned char> RawBytesFromMuSig2SecNonce(
-    MuSig2SecNonce& nonce) {
-  auto* data = static_cast<secp256k1_musig_secnonce*>(nonce.Get())->data;
-  std::vector<unsigned char> raw_nonce{
-      data, data + sizeof(secp256k1_musig_secnonce)};
-  nonce.Invalidate();
-  return raw_nonce;
 }
 
 std::map<std::string, time_t> NunchukImpl::last_scan_;
@@ -3331,16 +3308,15 @@ std::string NunchukImpl::SignSatochipTransaction(
   auto local_db = storage_->GetLocalDb(chain_);
   auto save_sec_nonce = [&](const std::string& session_id,
                             const std::vector<unsigned char>& secnonce) {
-    local_db.SetMuSig2SecNonce(ParseMuSig2SessionId(session_id),
-                               RawBytesToMuSig2SecNonce(secnonce));
+    local_db.SetMuSig2SecNonceBytes(ParseMuSig2SessionId(session_id),
+                                    secnonce);
   };
   auto consume_sec_nonce =
       [&](const std::string& session_id)
           -> std::optional<std::vector<unsigned char>> {
     try {
-      auto secnonce = local_db.GetMuSig2SecNonce(
+      return local_db.GetMuSig2SecNonceBytes(
           ParseMuSig2SessionId(session_id));
-      return RawBytesFromMuSig2SecNonce(secnonce);
     } catch (StorageException& se) {
       if (se.code() == StorageException::NONCE_NOT_FOUND) {
         return std::nullopt;

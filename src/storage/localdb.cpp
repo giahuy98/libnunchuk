@@ -52,6 +52,21 @@ void NunchukLocalDb::SetMuSig2SecNonce(const uint256& session_id, MuSig2SecNonce
   SQLCHECK(sqlite3_finalize(stmt));
 }
 
+void NunchukLocalDb::SetMuSig2SecNonceBytes(
+    const uint256& session_id, const std::vector<unsigned char>& nonce) const {
+  std::string key = session_id.GetHex();
+  std::string value = HexStr(nonce);
+  sqlite3_stmt* stmt;
+  std::string sql =
+      "INSERT INTO SECNONCES(SESSION, NONCE) VALUES (?1, ?2)"
+      "ON CONFLICT(SESSION) DO UPDATE SET NONCE=excluded.NONCE;";
+  sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, NULL);
+  sqlite3_bind_text(stmt, 1, key.c_str(), key.size(), NULL);
+  sqlite3_bind_text(stmt, 2, value.c_str(), value.size(), NULL);
+  sqlite3_step(stmt);
+  SQLCHECK(sqlite3_finalize(stmt));
+}
+
 std::vector<unsigned char> hexStringToByteArray(const std::string& hexString) {
   std::vector<unsigned char> byteArray;
   for (size_t i = 0; i < hexString.length(); i += 2) {
@@ -92,6 +107,36 @@ MuSig2SecNonce NunchukLocalDb::GetMuSig2SecNonce(const uint256& session_id) cons
   MuSig2SecNonce nonce{};
   memcpy(static_cast<secp256k1_musig_secnonce*>(nonce.Get())->data, rv.data(), 132);
   return nonce;
+}
+
+std::vector<unsigned char> NunchukLocalDb::GetMuSig2SecNonceBytes(
+    const uint256& session_id) const {
+  std::string key = session_id.GetHex();
+  std::string value;
+
+  sqlite3_exec(db_, "BEGIN TRANSACTION;", NULL, NULL, NULL);
+  sqlite3_stmt* stmt;
+  std::string sql = "SELECT * FROM SECNONCES WHERE SESSION = ?;";
+  sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, NULL);
+  sqlite3_bind_text(stmt, 1, key.c_str(), key.size(), NULL);
+  sqlite3_step(stmt);
+  if (sqlite3_column_text(stmt, 0)) {
+    value = std::string((char*)sqlite3_column_text(stmt, 1));
+    SQLCHECK(sqlite3_finalize(stmt));
+  } else {
+    SQLCHECK(sqlite3_finalize(stmt));
+    throw StorageException(StorageException::NONCE_NOT_FOUND,
+                           "Nonce not found!");
+  }
+
+  sql = "DELETE FROM SECNONCES WHERE SESSION = ?;";
+  sqlite3_prepare(db_, sql.c_str(), -1, &stmt, NULL);
+  sqlite3_bind_text(stmt, 1, key.c_str(), key.size(), NULL);
+  sqlite3_step(stmt);
+  sqlite3_exec(db_, "COMMIT;", NULL, NULL, NULL);
+  SQLCHECK(sqlite3_finalize(stmt));
+
+  return hexStringToByteArray(value);
 }
 
 void NunchukLocalDb::SetPreferScriptPath(const std::string& tx_id, bool value) const {
