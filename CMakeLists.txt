@@ -236,6 +236,19 @@ add_library("${PROJECT_NAME}" STATIC
     src/utils/secretbox.cpp
     src/utils/tweetnacl.c
     src/utils/bip388.hpp
+    src/utils/ledger/apdu_framer.cpp
+    src/utils/ledger/bitcoin_app.cpp
+    src/utils/ledger/continuation.cpp
+    src/utils/ledger/ledger_session.cpp
+    src/utils/ledger/ledger_manager.cpp
+    src/utils/ledger/psbt.cpp
+    src/utils/ledger/apdu_framer.hpp
+    src/utils/ledger/bitcoin_app.hpp
+    src/utils/ledger/continuation.hpp
+    src/utils/ledger/types.hpp
+    src/utils/ledger/ledger_session.hpp
+    src/utils/ledger/ledger_manager.hpp
+    src/utils/ledger/psbt.hpp
     src/miniscript/compiler.cpp
     src/miniscript/miniscript.cpp
     src/miniscript/timeline.cpp
